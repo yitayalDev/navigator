@@ -7,8 +7,10 @@ import sys
 import asyncio
 import json
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template, redirect, make_response, flash
+from flask import Flask, request, jsonify, render_template, redirect, make_response, flash, session
 from flask_cors import CORS
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_bcrypt import Bcrypt
 from bson import ObjectId
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler, ConversationHandler
@@ -35,6 +37,38 @@ logger = logging.getLogger(__name__)
 # Flask app
 app = Flask(__name__, template_folder='templates')
 app.secret_key = 'uog-navigator-admin-secret-key'
+
+# Initialize Flask-Bcrypt
+bcrypt = Bcrypt(app)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# User class for Flask-Login
+class User(UserMixin):
+    def __init__(self, user_id, username):
+        self.id = user_id
+        self.username = username
+    
+    def get_id(self):
+        return str(self.id)
+
+@login_manager.user_loader
+def load_user(user_id):
+    # Try to find user by the ID
+    from bson import ObjectId
+    try:
+        user = db._db.admin_users.find_one({'_id': ObjectId(user_id)})
+        if user:
+            return User(str(user['_id']), user['username'])
+    except:
+        # If ID is username, try that way
+        user = db.get_admin_user(user_id)
+        if user:
+            return User(str(user['_id']), user['username'])
+    return None
 
 # Redirect root to admin
 @app.route('/')
@@ -192,7 +226,44 @@ def get_campuses_for_template():
         return CampusData.CAMPUSES
 
 
+# =========================================================================
+# LOGIN ROUTES
+# =========================================================================
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def login():
+    """Admin login page."""
+    if current_user.is_authenticated:
+        return redirect('/admin')
+    
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        
+        # Verify credentials
+        if db.verify_password(username, password):
+            user = db.get_admin_user(username)
+            if user:
+                user_obj = User(str(user['_id']), user['username'])
+                login_user(user_obj)
+                next_page = request.args.get('next')
+                return redirect(next_page or '/admin')
+        
+        flash('Invalid username or password', 'danger')
+    
+    return render_template('admin/login.html')
+
+@app.route('/admin/logout')
+@login_required
+def logout():
+    """Admin logout."""
+    logout_user()
+    flash('You have been logged out', 'info')
+    return redirect('/admin/login')
+
+
 @app.route('/admin', methods=['GET'])
+@login_required
 def admin_dashboard():
     """Admin dashboard showing statistics."""
     # Get stats
@@ -252,6 +323,7 @@ def admin_dashboard():
 
 
 @app.route('/admin/buildings', methods=['GET'])
+@login_required
 def admin_buildings():
     """Manage buildings page."""
     # Get query parameters
@@ -285,6 +357,7 @@ def admin_buildings():
 
 
 @app.route('/admin/buildings/add', methods=['GET', 'POST'])
+@login_required
 def admin_add_building():
     """Add new building page."""
     if request.method == 'POST':
@@ -350,6 +423,7 @@ def admin_add_building():
 
 
 @app.route('/admin/buildings/edit/<building_id>', methods=['GET', 'POST'])
+@login_required
 def admin_edit_building(building_id):
     """Edit building page."""
     building = db.get_building_by_id(building_id)
@@ -406,6 +480,7 @@ def admin_edit_building(building_id):
 
 
 @app.route('/admin/api/buildings/<building_id>', methods=['DELETE'])
+@login_required
 def admin_delete_building(building_id):
     """API endpoint to delete a building."""
     result = db.delete_building(building_id)
@@ -416,6 +491,7 @@ def admin_delete_building(building_id):
 
 
 @app.route('/admin/categories', methods=['GET', 'POST'])
+@login_required
 def admin_categories():
     """Categories management page."""
     try:
@@ -488,6 +564,7 @@ def admin_categories():
     )
 
 @app.route('/admin/categories/delete/<category_name>', methods=['POST'])
+@login_required
 def delete_category(category_name):
     """Delete a category."""
     success = db.delete_category(category_name)
@@ -499,6 +576,7 @@ def delete_category(category_name):
 
 
 @app.route('/admin/campuses', methods=['GET', 'POST'])
+@login_required
 def admin_campuses():
     """Campuses management page."""
     # Handle adding new campus
@@ -563,6 +641,7 @@ def admin_campuses():
 
 
 @app.route('/admin/campuses/delete/<campus_id>', methods=['POST'])
+@login_required
 def delete_campus(campus_id):
     """Delete a campus."""
     success = db.delete_campus(campus_id)
@@ -1334,6 +1413,13 @@ def main():
             db.initialize_default_locations()
         else:
             print(f"Found {len(existing_locations)} locations in database. Keeping existing data.")
+        
+        # Initialize default admin user
+        print("Initializing default admin user...")
+        if db.initialize_default_admin('admin123', '123'):
+            print("Default admin user created: admin123")
+        else:
+            print("Admin user already exists or error occurred.")
     
     # Build Telegram application
     bot_token = config.get_bot_token()

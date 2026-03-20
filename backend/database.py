@@ -541,6 +541,66 @@ class Database:
             return False
     
     # =========================================================================
+    # ADMIN USER METHODS
+    # =========================================================================
+    
+    def create_admin_user(self, username: str, password: str) -> bool:
+        """Create a new admin user with hashed password."""
+        try:
+            from flask_bcrypt import Bcrypt
+            bcrypt = Bcrypt()
+            hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+            
+            user = {
+                'username': username,
+                'password': hashed_password,
+                'created_at': datetime.utcnow()
+            }
+            
+            self._db.admin_users.insert_one(user)
+            logger.info(f"Created admin user: {username}")
+            return True
+        except Exception as e:
+            logger.error(f"Error creating admin user: {e}")
+            return False
+    
+    def get_admin_user(self, username: str) -> Optional[Dict]:
+        """Get admin user by username."""
+        try:
+            return self._db.admin_users.find_one({'username': username})
+        except Exception as e:
+            logger.error(f"Error getting admin user: {e}")
+            return None
+    
+    def verify_password(self, username: str, password: str) -> bool:
+        """Verify admin user password."""
+        try:
+            from flask_bcrypt import Bcrypt
+            bcrypt = Bcrypt()
+            
+            user = self.get_admin_user(username)
+            if not user:
+                return False
+            
+            return bcrypt.check_password_hash(user['password'], password)
+        except Exception as e:
+            logger.error(f"Error verifying password: {e}")
+            return False
+    
+    def initialize_default_admin(self, username: str = 'admin123', password: str = '123') -> bool:
+        """Initialize default admin user if not exists."""
+        try:
+            existing_user = self.get_admin_user(username)
+            if existing_user:
+                logger.info(f"Admin user '{username}' already exists")
+                return True
+            
+            return self.create_admin_user(username, password)
+        except Exception as e:
+            logger.error(f"Error initializing default admin: {e}")
+            return False
+    
+    # =========================================================================
     # HELPER METHODS
     # =========================================================================
     
