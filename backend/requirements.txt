@@ -1,0 +1,16 @@
+# Telegram Bot Dependencies
+python-telegram-bot==20.5
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# HTTP Requests (for SDMR routing service)
+requests==2.31.0
+
+# HTTP Server (optional - for webhook mode)
+flask==3.0.0
+flask-cors
+
+# MongoDB Database
+pymongo==4.6.1
+dnspython==2.4.2
