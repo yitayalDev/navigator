@@ -744,8 +744,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Send message asking user to send location from app
         await update.message.reply_text(
             f"Friend Found: @{friend_username}\n\n"
-                "Now please send your current location from the app.\n\n"
-                "Use the app to share your location with this friend!"
+                "Now please send your current location from Telegram.\n\n"
+                "Tap the attachment button and select 'Location' to share your current position with your friend!"
         )
         
         # Store for API to use
@@ -1020,7 +1020,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Please enter your friend's Telegram username (without @)\n"
                 "Example: john_doe\n\n"
                 "WARNING: Your friend must have started the bot first!\n\n"
-                "Then send your location from the app."
+                "Then send your location from Telegram."
         )
         
         # Store user as waiting for friend's username
@@ -1062,22 +1062,19 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     # Confirm to sender
                     await query.edit_message_text(
-                        text=f"✅ *Location Sent Successfully!*\n\n"
-                            f"📨 *Location sent to:* @{friend_username}\n"
-                            f"📌 *Coordinates:* {coords}\n\n"
-                            f"Your friend has received the location link!",
-                        parse_mode='Markdown'
+                        text=f"Location Sent Successfully!\n\n"
+                            f"Location sent to: @{friend_username}\n"
+                            f"Coordinates: {coords}\n\n"
+                            f"Your friend has received the location link!"
                     )
                 else:
                     await query.edit_message_text(
-                        text=f"❌ Could not send to @{friend_username}.\n"
-                            f"They may not have started the bot yet.",
-                        parse_mode='Markdown'
+                        text=f"Could not send to @{friend_username}.\n"
+                            f"They may not have started the bot yet."
                     )
             else:
                 await query.edit_message_text(
-                    text=f"❌ User @{friend_username} not found!",
-                    parse_mode='Markdown'
+                    text=f"User @{friend_username} not found!"
                 )
             
             # Clean up

@@ -1265,7 +1265,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Please enter your friend's Telegram username (without @)\n"
                 "Example: john_doe\n\n"
                 "WARNING: Your friend must have started the bot first!\n\n"
-                "Then send your location from the app."
+                "Then send your location from Telegram."
         )
         
         # Store user as waiting for friend's username
@@ -1305,22 +1305,19 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # Confirm to sender
                         await query.edit_message_text(
-                            text=f"✅ *Location Sent Successfully!*\n\n"
-                                f"📨 *Location sent to:* @{friend_username}\n"
-                                f"📌 *Coordinates:* {coords}\n\n"
-                                f"Your friend has received the location link!",
-                            parse_mode='Markdown'
+                            text=f"Location Sent Successfully!\n\n"
+                                f"Location sent to: @{friend_username}\n"
+                                f"Coordinates: {coords}\n\n"
+                                f"Your friend has received the location link!"
                         )
                     else:
                         await query.edit_message_text(
-                            text=f"❌ Could not send to @{friend_username}.\n"
-                                f"They may not have started the bot yet.",
-                            parse_mode='Markdown'
+                            text=f"Could not send to @{friend_username}.\n"
+                                f"They may not have started the bot yet."
                         )
                 else:
                     await query.edit_message_text(
-                        text=f"❌ User @{friend_username} not found!",
-                        parse_mode='Markdown'
+                        text=f"User @{friend_username} not found!"
                     )
             except Exception as e:
                 await query.edit_message_text(
@@ -1380,11 +1377,54 @@ async def handle_location_message(update: Update, context: ContextTypes.DEFAULT_
             return
         
         elif share_data.get('state') == 'waiting_location_from_app':
-            # User is supposed to send location from the app, not from Telegram
-            await update.message.reply_text(
-                "📱 Please send your location from the mobile app, not from Telegram.\n\n"
-                "Use the app to share your current location with your friend!"
-            )
+            # User sent location from Telegram - accept it and send to friend
+            location = update.message.location
+            lat = location.latitude
+            lng = location.longitude
+            coords = f"{lat},{lng}"
+            
+            friend_username = share_data.get('friend_username', '')
+            sender_name = share_data.get('sender_name', username)
+            
+            # Get friend from database
+            friend = db.get_user(username=friend_username)
+            
+            if not friend:
+                await update.message.reply_text(
+                    f"Could not find user @{friend_username}.",
+                )
+                del pending_shares[user_id]
+                return
+            
+            # Generate maps link
+            maps_link = f"https://www.google.com/maps?q={lat},{lng}"
+            
+            # Send location to friend
+            try:
+                await context.bot.send_message(
+                    chat_id=friend['user_id'],
+                    text=f"📍 *Location from @{sender_name}*\n\n"
+                        f"📱 *From:* @{sender_name}\n"
+                        f"📌 *Coordinates:* {coords}\n"
+                        f"🔗 *Map Link:* {maps_link}",
+                    parse_mode='Markdown'
+                )
+                
+                # Confirm to sender
+                await update.message.reply_text(
+                    text=f"Location Sent Successfully!\n\n"
+                        f"Location sent to: @{friend_username}\n"
+                        f"Coordinates: {coords}\n\n"
+                        f"Your friend has received the location link!"
+                )
+            except Exception as e:
+                await update.message.reply_text(
+                    text=f"Could not send to @{friend_username}.\n"
+                        f"They may not have started the bot yet."
+                )
+            
+            # Clear pending share
+            del pending_shares[user_id]
             return
     
     # If not in share mode, just acknowledge
@@ -1433,8 +1473,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(
                 f"Friend Found: @{friend_username}\n\n"
-                    "Now please send your current location from the app.\n\n"
-                    "Use the app to share your location with this friend!"
+                    "Now please send your current location from Telegram.\n\n"
+                    "Tap the attachment button and select 'Location' to share your current position with your friend!"
             )
             return
         
