@@ -383,13 +383,27 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    // Share to Telegram
-                    Navigator.pop(context);
-                    _shareLocation();
+                  onPressed: () async {
+                    // Open Telegram bot for sharing
+                    final telegramUrl = 'https://t.me/UOGStudentNavBot';
+                    if (await canLaunchUrl(Uri.parse(telegramUrl))) {
+                      await launchUrl(
+                        Uri.parse(telegramUrl),
+                        mode: LaunchMode.externalApplication,
+                      );
+                    } else {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Could not open Telegram'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
                   },
-                  icon: const Icon(Icons.share, size: 18),
-                  label: const Text('Share'),
+                  icon: const Icon(Icons.send, size: 18),
+                  label: const Text('Share via Telegram'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF0088CC),
                     side: const BorderSide(color: Color(0xFF0088CC)),
@@ -473,98 +487,6 @@ class _LocationDetailsSheetState extends State<LocationDetailsSheet> {
       default:
         return Icons.help;
     }
-  }
-
-  void _shareLocation() async {
-    // Show a dialog to get friend's username
-    final friendUsernameController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Share Location via Telegram'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Share "${widget.location.name}" location with a friend via Telegram bot.',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: friendUsernameController,
-              decoration: const InputDecoration(
-                labelText: "Friend's Telegram Username",
-                hintText: 'Enter username (without @)',
-                prefixIcon: Icon(Icons.person),
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final friendUsername = friendUsernameController.text.trim();
-              if (friendUsername.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a username'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-              
-              Navigator.pop(context);
-              
-              // Show loading
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Sharing location...'),
-                  backgroundColor: Colors.blue,
-                ),
-              );
-              
-              // Share the location
-              final coords = '${widget.location.lat},${widget.location.lng}';
-              final result = await ApiService.shareLocationToFriend(
-                senderId: 'app_user',
-                friendUsername: friendUsername,
-                coords: coords,
-                locationName: widget.location.name,
-                senderName: 'UOG Navigator User',
-              );
-              
-              if (result != null && result['success'] == true) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('✅ Location shared with @$friendUsername!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('❌ Failed to share: ${result?['error'] ?? 'Unknown error'}'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0088CC),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Share'),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -937,6 +859,109 @@ class _CampusListPageState extends State<CampusListPage> {
     });
   }
 
+  /// Share current GPS location to a friend
+  void _shareCurrentLocation() async {
+    if (_position == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please get your location first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    // Show dialog to get friend's username
+    final friendUsernameController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Share My Location'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Share your current GPS location with a friend via Telegram.',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: friendUsernameController,
+              decoration: const InputDecoration(
+                labelText: "Friend's Telegram Username",
+                hintText: 'Enter username (without @)',
+                prefixIcon: Icon(Icons.person),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final friendUsername = friendUsernameController.text.trim();
+              if (friendUsername.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a username'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              
+              Navigator.pop(context);
+              
+              // Show loading
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Sharing location...'),
+                  backgroundColor: Colors.blue,
+                ),
+              );
+              
+              // Share the location
+              final coords = '${_position!.latitude},${_position!.longitude}';
+              final result = await ApiService.shareLocationToFriend(
+                senderId: 'app_user',
+                friendUsername: friendUsername,
+                coords: coords,
+                locationName: 'My Current Location',
+                senderName: 'UOG Navigator User',
+              );
+              
+              if (result != null && result['success'] == true) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('✅ Location shared with @$friendUsername!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('❌ Failed: ${result?['error'] ?? 'Unknown error'}'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0088CC),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Share'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -949,6 +974,29 @@ class _CampusListPageState extends State<CampusListPage> {
             backgroundColor: const Color(0xFF1E88E5),
             foregroundColor: Colors.white,
             actions: [
+              // Open Telegram button
+              IconButton(
+                icon: const Icon(Icons.send),
+                onPressed: () async {
+                  final telegramUrl = 'https://t.me/UOGStudentNavBot';
+                  if (await canLaunchUrl(Uri.parse(telegramUrl))) {
+                    await launchUrl(
+                      Uri.parse(telegramUrl),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not open Telegram'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+                tooltip: 'Open Telegram bot',
+              ),
               // Location button in app bar
               IconButton(
                 icon: _isLoadingLocation
@@ -2044,16 +2092,31 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            // Share to Telegram button
+            // Open Telegram button
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(context);
-                  _shareLocationToFriend(location);
+                  final telegramUrl = 'https://t.me/UOGStudentNavBot';
+                  if (await canLaunchUrl(Uri.parse(telegramUrl))) {
+                    await launchUrl(
+                      Uri.parse(telegramUrl),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not open Telegram'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 },
                 icon: const Icon(Icons.send),
-                label: const Text('Share via Telegram'),
+                label: const Text('Share via Telegram Bot'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF0088CC),
                   side: const BorderSide(color: Color(0xFF0088CC)),

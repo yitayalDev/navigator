@@ -85,6 +85,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Create inline keyboard for campus selection
     keyboard = [
         [
+            InlineKeyboardButton("📤 Share Current Location", callback_data='share_location_start'),
+        ],
+        [
             InlineKeyboardButton("🏫 Maraki Campus", callback_data='campus_maraki'),
         ],
         [
@@ -95,7 +98,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     
-    # If coordinates were passed from the app, add share option
+    # If coordinates were passed from the app, also add option to share specific location
     if args:
         coords_arg = args[0]
         try:
@@ -106,9 +109,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lng = float(lng.strip())
                 coords = f"{lat},{lng}"
                 
-                # Add share current location button
+                # Add share specific location button
                 keyboard.insert(0, [
-                    InlineKeyboardButton("📤 Share My Current Location", callback_data=f'share_current_{coords}'),
+                    InlineKeyboardButton("📍 Share This Location", callback_data=f'share_current_{coords}'),
                 ])
         except:
             pass
@@ -120,7 +123,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 I can help you navigate the University of Gondar campuses.
 
-*Please select a campus to explore:*
+*What would you like to do?*
+• 📤 Share your current location with friends
+• 🏫 Explore campus locations and buildings
+• 🗺️ Get directions to campus locations
 """
     
     await update.message.reply_text(
@@ -652,6 +658,42 @@ async def send_directions(update: Update, context: ContextTypes.DEFAULT_TYPE, lo
     )
 
 
+async def handle_location_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle location messages sent by users."""
+    # Check if user is in share location flow
+    pending_mode = context.user_data.get('pending_share_mode')
+    
+    if pending_mode == 'waiting_location':
+        # Get the location from the message
+        location = update.message.location
+        lat = location.latitude
+        lng = location.longitude
+        coords = f"{lat},{lng}"
+        
+        # Clear the pending mode
+        del context.user_data['pending_share_mode']
+        
+        # Ask for friend's username
+        await update.message.reply_text(
+            f"📍 *Location Received!*\n\n"
+            f"Your location: {coords}\n\n"
+            f"Now please reply with your friend's Telegram username (without @)\n"
+            f"Example: john_doe\n\n"
+            f"⚠️ Your friend must have started the bot first!",
+            parse_mode='Markdown'
+        )
+        
+        # Store location for next message
+        context.user_data['pending_current_location'] = {'coords': coords}
+        return
+    
+    # If not in share mode, just acknowledge
+    await update.message.reply_text(
+        "📍 Thank you for sharing your location!\n\n"
+        "Use /menu to see available options."
+    )
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text messages."""
     text = update.message.text
@@ -683,6 +725,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Send the location to friend
         await send_location_to_friend(update, context, friend_username, coords, name)
+        return
+    
+    # Check if user is waiting to enter friend's username (from share_location_start button)
+    pending_mode = context.user_data.get('pending_share_mode')
+    if pending_mode == 'waiting_friend_username':
+        # User entered friend's username
+        friend_username = text.strip()
+        if friend_username.startswith('@'):
+            friend_username = friend_username[1:]
+        friend_username = friend_username.lower()
+        
+        # Clear the pending mode
+        del context.user_data['pending_share_mode']
+        
+        sender_name = context.user_data.get('sender_name', 'A friend')
+        
+        # Send message asking user to send location from app
+        await update.message.reply_text(
+            f"Friend Found: @{friend_username}\n\n"
+                "Now please send your current location from the app.\n\n"
+                "Use the app to share your location with this friend!"
+        )
+        
+        # Store for API to use
+        context.user_data['pending_share_location'] = {
+            'coords': '',  # Will come from app
+            'name': 'Current Location',
+            'friend_username': friend_username,
+            'sender_name': sender_name
+        }
         return
     
     if text == '📍 All Locations':
@@ -919,22 +991,115 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['pending_share_location'] = {'coords': coords, 'name': name}
     
     elif callback_data == 'share_my_location':
-        # Handle share my current location to friend
+        # Handle share my current location to friend - ask user to share location in Telegram
         await query.edit_message_text(
-            text="📤 *Share My Current Location*\n\n"
-                 "To share your current location with a friend:\n\n"
-                 "1. Open the UOG Navigator mobile app\n"
-                 "2. Go to any location\n"
-                 "3. Tap 'Share Location' button\n"
-                 "4. Choose Telegram or Bot to share\n\n"
-                 "Your current GPS coordinates will be shared with your friends!\n\n"
-                 "Alternatively, reply with your friend's username (without @) here,\n"
-                 "and I'll help you share a campus location with them.",
+            text="📤 *Share Your Current Location*\n\n"
+                "To share your current location with a friend:\n\n"
+                "1. 📍 *Click the attachment button (paper clip) in this chat*\n"
+                "2. Select \"Location\" from the menu\n"
+                "3. Send your current location\n\n"
+                "I will then ask for your friend's username to send the location to.\n\n"
+                "⚠️ Your friend must have started the bot first!",
             parse_mode='Markdown'
         )
         
-        # Set pending mode
-        context.user_data['pending_share_mode'] = 'my_location'
+        # Set pending mode to wait for location
+        user_id = update.effective_user.id
+        username = update.effective_user.username or update.effective_user.first_name
+        context.user_data['pending_share_mode'] = 'waiting_location'
+        context.user_data['sender_name'] = username
+    
+    elif callback_data == 'share_location_start':
+        # Handle share location from the app - ask for friend's username
+        user_id = update.effective_user.id
+        username = update.effective_user.username or update.effective_user.first_name
+        
+        # Use plain text without markdown to avoid parsing errors
+        await query.edit_message_text(
+            text="Share Your Current Location\n\n"
+                "Please enter your friend's Telegram username (without @)\n"
+                "Example: john_doe\n\n"
+                "WARNING: Your friend must have started the bot first!\n\n"
+                "Then send your location from the app."
+        )
+        
+        # Store user as waiting for friend's username
+        context.user_data['pending_share_mode'] = 'waiting_friend_username'
+        context.user_data['sender_name'] = username
+    
+    elif callback_data.startswith('confirm_send_'):
+        # Handle confirm send button click
+        # Format: confirm_send_friend_username_coords
+        parts = callback_data.replace('confirm_send_', '').split('_')
+        if len(parts) >= 2:
+            friend_username = parts[0]
+            coords = '_'.join(parts[1:])
+            
+            sender_id = update.effective_user.id
+            sender_name = update.effective_user.username or update.effective_user.first_name
+            
+            # Send location to friend using the same function
+            from database import MongoDB
+            db = MongoDB()
+            friend = db.get_user(username=friend_username)
+            
+            if friend:
+                chat_id = friend.get('chat_id')
+                if chat_id:
+                    # Generate maps link
+                    lat, lng = coords.split(',')
+                    maps_link = f"https://www.google.com/maps?q={lat},{lng}"
+                    
+                    # Send to friend
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"📍 *Location Shared by Friend*\n\n"
+                            f"📱 *From:* @{sender_name}\n"
+                            f"📌 *Coordinates:* {coords}\n"
+                            f"🔗 *Map Link:* {maps_link}",
+                        parse_mode='Markdown'
+                    )
+                    
+                    # Confirm to sender
+                    await query.edit_message_text(
+                        text=f"✅ *Location Sent Successfully!*\n\n"
+                            f"📨 *Location sent to:* @{friend_username}\n"
+                            f"📌 *Coordinates:* {coords}\n\n"
+                            f"Your friend has received the location link!",
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await query.edit_message_text(
+                        text=f"❌ Could not send to @{friend_username}.\n"
+                            f"They may not have started the bot yet.",
+                        parse_mode='Markdown'
+                    )
+            else:
+                await query.edit_message_text(
+                    text=f"❌ User @{friend_username} not found!",
+                    parse_mode='Markdown'
+                )
+            
+            # Clean up
+            if 'pending_share_mode' in context.user_data:
+                del context.user_data['pending_share_mode']
+            return
+    
+    elif callback_data == 'cancel_send':
+        # Handle cancel button click
+        if 'pending_share_mode' in context.user_data:
+            del context.user_data['pending_share_mode']
+        if 'pending_share_location' in context.user_data:
+            del context.user_data['pending_share_location']
+        if 'pending_current_location' in context.user_data:
+            del context.user_data['pending_current_location']
+        
+        await query.edit_message_text(
+            text="❌ *Share Location Cancelled*\n\n"
+                "Your location was not sent to anyone.",
+            parse_mode='Markdown'
+        )
+        return
     
     elif callback_data.startswith('share_current_'):
         # Handle sharing current location from app with coordinates
@@ -1003,8 +1168,11 @@ def main():
     # Add callback query handler for inline buttons
     app.add_handler(CallbackQueryHandler(callback_handler))
     
-    # Add message handler
+    # Add message handler for text messages
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    # Add message handler for location messages
+    app.add_handler(MessageHandler(filters.LOCATION, handle_location_message))
     
     # Add error handler
     app.add_error_handler(error_handler)
