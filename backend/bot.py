@@ -16,6 +16,8 @@ Features:
 """
 import os
 import sys
+import requests
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, 
@@ -43,6 +45,10 @@ SELECTING_CAMPUS, SELECTING_CATEGORY, SELECTING_LOCATION = range(3)
 # User registry to store users who have started the bot
 # Format: {username: {'chat_id': chat_id, 'name': name, 'username': username}}
 user_registry = {}
+
+# Store pending share requests (mirrors server.py's pending_shares)
+# Format: {user_id: {'state': ..., 'friend_username': ..., 'sender_name': ..., 'timestamp': ...}}
+pending_shares = {}
 
 
 def register_user(update: Update):
@@ -364,12 +370,13 @@ async def share_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def sharelocation_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Share current GPS location from the app with a friend.
+    """Share current GPS location from Telegram with a friend.
     
     Usage: /sharelocation [lat,lng]
     Example: /sharelocation 12.5980,37.3900
     
     The bot will ask for the friend's username after receiving the location.
+    OR use the menu button to share directly from Telegram.
     """
     # Register the sender
     register_user(update)
@@ -730,31 +737,156 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if user is waiting to enter friend's username (from share_location_start button)
     pending_mode = context.user_data.get('pending_share_mode')
     if pending_mode == 'waiting_friend_username':
-        # User entered friend's username
+        # User entered friend's username - now get location from app
         friend_username = text.strip()
         if friend_username.startswith('@'):
             friend_username = friend_username[1:]
         friend_username = friend_username.lower()
         
-        # Clear the pending mode
-        del context.user_data['pending_share_mode']
-        
         sender_name = context.user_data.get('sender_name', 'A friend')
         
-        # Send message asking user to send location from app
-        await update.message.reply_text(
-            f"Friend Found: @{friend_username}\n\n"
-                "Now please send your current location from Telegram.\n\n"
-                "Tap the attachment button and select 'Location' to share your current position with your friend!"
-        )
+        # Check if friend exists in database
+        friend = db.get_user(username=friend_username)
         
-        # Store for API to use
-        context.user_data['pending_share_location'] = {
-            'coords': '',  # Will come from app
-            'name': 'Current Location',
-            'friend_username': friend_username,
-            'sender_name': sender_name
-        }
+        if not friend:
+            await update.message.reply_text(
+                f"User @{friend_username} not found!\n\n"
+                f"Please make sure your friend has started the bot first."
+            )
+            return
+        
+        # Try to get location from app via API
+        coords = None
+        user_id = update.effective_user.id
+        try:
+            # First try with user's actual ID
+            response = requests.get(f'{os.getenv("APP_API_URL", "http://127.0.0.1:5000")}/api/get-current-location?user_id={user_id}', timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                coords = data.get('coords')
+            
+            # If not found, try with 'app_user' as fallback
+            if not coords:
+                response = requests.get(f'{os.getenv("APP_API_URL", "http://127.0.0.1:5000")}/api/get-current-location?user_id=app_user', timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    coords = data.get('coords')
+        except Exception as e:
+            logger.info(f"Could not get location from app: {e}")
+        
+        # Clear the pending mode from context
+        if 'pending_share_mode' in context.user_data:
+            del context.user_data['pending_share_mode']
+        
+        # Also clear from pending_shares
+        if user_id in pending_shares:
+            del pending_shares[user_id]
+        
+        if coords:
+            # Got location from app, send directly to friend
+            lat, lng = coords.split(',') if coords else ('0', '0')
+            maps_link = f"https://www.google.com/maps?q={lat},{lng}"
+            
+            # Send location to friend
+            try:
+                chat_id = friend.get('chat_id')
+                if chat_id:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"📍 *Location from @{sender_name}*\n\n"
+                            f"📌 *Coordinates:* {lat},{lng}\n"
+                            f"🔗 *Map Link:* {maps_link}",
+                        parse_mode='Markdown'
+                    )
+                    
+                    # Confirm to sender
+                    await update.message.reply_text(
+                        text=f"✅ Location sent to @{friend_username}!\n\n"
+                            f"📌 Coordinates: {lat},{lng}\n"
+                            f"🔗 Map: {maps_link}"
+                    )
+                else:
+                    await update.message.reply_text(
+                        text=f"Could not send to @{friend_username}. They may not have started the bot yet."
+                    )
+            except Exception as e:
+                await update.message.reply_text(
+                    text=f"Error sending location: {str(e)}"
+                )
+        else:
+            # Can't get location immediately, set state and tell user to open app
+            # Store pending share request
+            pending_shares[user_id] = {
+                'state': 'waiting_location_from_app',
+                'friend_username': friend_username,
+                'sender_name': sender_name,
+                'timestamp': datetime.now(),
+                'coords': ''
+            }
+            
+            await update.message.reply_text(
+                text=f"✅ Friend Found: @{friend_username}\n\n"
+                    "📱 Please open the UOG Navigator app and share your location.\n\n"
+                    "I'll automatically get your current GPS location from the app and send it to your friend!",
+                parse_mode='Markdown'
+            )
+        return
+    
+    if pending_mode == 'waiting_username_with_location':
+        # We already have location from app, just need friend's username
+        friend_username = text.strip()
+        if friend_username.startswith('@'):
+            friend_username = friend_username[1:]
+        friend_username = friend_username.lower()
+        
+        # Get the coordinates from context
+        coords = context.user_data.get('coords', '')
+        sender_name = context.user_data.get('sender_name', 'A friend')
+        
+        # Clear the pending mode
+        del context.user_data['pending_share_mode']
+        if 'coords' in context.user_data:
+            del context.user_data['coords']
+        
+        # Check if friend exists in database
+        friend = db.get_user(username=friend_username)
+        
+        if not friend:
+            await update.message.reply_text(
+                f"User @{friend_username} not found!\n\n"
+                f"Please make sure your friend has started the bot first."
+            )
+            return
+        
+        # Generate Google Maps link
+        lat, lng = coords.split(',') if coords else (0, 0)
+        maps_link = f"https://www.google.com/maps?q={lat},{lng}"
+        
+        # Send location directly to friend
+        try:
+            chat_id = friend.get('chat_id')
+            if chat_id:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"Location from @{sender_name}\n\n"
+                        f"Coordinates: {coords}\n"
+                        f"Map: {maps_link}"
+                )
+                
+                # Confirm to sender
+                await update.message.reply_text(
+                    text=f"Location sent to @{friend_username}!\n\n"
+                        f"Coordinates: {coords}\n"
+                        f"Map: {maps_link}"
+                )
+            else:
+                await update.message.reply_text(
+                    text=f"Could not send to @{friend_username}. They may not have started the bot yet."
+                )
+        except Exception as e:
+            await update.message.reply_text(
+                text=f"Error sending location: {str(e)}"
+            )
         return
     
     if text == '📍 All Locations':
@@ -1010,22 +1142,28 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['sender_name'] = username
     
     elif callback_data == 'share_location_start':
-        # Handle share location from the app - ask for friend's username
+        # Start share location flow - ask for friend's username
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name
         
-        # Use plain text without markdown to avoid parsing errors
+        # Ask for friend's username
         await query.edit_message_text(
             text="Share Your Current Location\n\n"
                 "Please enter your friend's Telegram username (without @)\n"
                 "Example: john_doe\n\n"
-                "WARNING: Your friend must have started the bot first!\n\n"
                 "Then send your location from Telegram."
         )
         
         # Store user as waiting for friend's username
         context.user_data['pending_share_mode'] = 'waiting_friend_username'
         context.user_data['sender_name'] = username
+        
+        # Also store in pending_shares for API access
+        pending_shares[user_id] = {
+            'state': 'waiting_friend_username',
+            'sender_name': username,
+            'timestamp': datetime.now()
+        }
     
     elif callback_data.startswith('confirm_send_'):
         # Handle confirm send button click

@@ -15,7 +15,8 @@
     <application
         android:label="UOG Navigation"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         
         <!-- Google Maps API Key -->
         <meta-data

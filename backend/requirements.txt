@@ -4,8 +4,11 @@ python-telegram-bot==20.5
 # Environment Variables
 python-dotenv==1.0.0
 
-# HTTP Requests (for SDMR routing service)
+# HTTP Requests (for SDMR routing service and AI API)
 requests==2.31.0
+
+# AI Integration (AIPIPE/OpenAI compatible)
+openai>=1.0.0
 
 # HTTP Server (optional - for webhook mode)
 flask==3.0.0

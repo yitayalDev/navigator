@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// API Service for communicating with the backend server
 class ApiService {
+  // IMPORTANT: Update this to your computer's IP address for physical device testing
   // For Android Emulator: use 'http://10.0.2.2:5000'
-  // For Real Device on same WiFi: use 'http://192.168.x.x:5000'
+  // For Real Device on same WiFi: use 'http://YOUR_PC_IP:5000'
   // For Web Browser: use 'http://localhost:5000'
-  // Use 127.0.0.1 instead of localhost to avoid IPv6 issues
-  static const String baseUrl = 'http://127.0.0.1:5000';
+  static const String baseUrl = 'http://192.168.137.1:5000';
   
   /// Health check
   static Future<bool> healthCheck() async {
@@ -79,8 +80,8 @@ class ApiService {
     }
   }
   
-  /// Share location to friend via bot
-  /// This calls the API which then sends the location through Telegram
+  /// Share location to friend via bot - INSTANT VERSION
+  /// Gets GPS and sends to friend immediately via Telegram
   static Future<Map<String, dynamic>?> shareLocationToFriend({
     required String senderId,
     required String friendUsername,
@@ -89,7 +90,25 @@ class ApiService {
     String senderName = 'A friend',
   }) async {
     try {
+      // Try instant share endpoint first
       final response = await http.post(
+        Uri.parse('$baseUrl/api/instant-share'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'user_id': senderId,
+          'friend_username': friendUsername,
+          'coords': coords,
+          'location_name': locationName,
+          'sender_name': senderName,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      
+      // Fallback to original endpoint
+      final fallbackResponse = await http.post(
         Uri.parse('$baseUrl/api/share-location'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
@@ -101,9 +120,10 @@ class ApiService {
         }),
       );
       
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
+      if (fallbackResponse.statusCode == 200) {
+        return json.decode(fallbackResponse.body);
       }
+      
       return {
         'success': false,
         'error': 'Failed to share location',
@@ -136,6 +156,95 @@ class ApiService {
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+  
+  /// Check if bot requested location from the app
+  static Future<Map<String, dynamic>?> checkLocationRequest(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/location-request?user_id=$userId'),
+      );
+      
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+  
+  /// Submit location to the server (after bot requested it)
+  static Future<Map<String, dynamic>?> submitLocation({
+    required String userId,
+    required String coords,
+    String locationName = 'Current Location',
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/submit-location'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'user_id': userId,
+          'coords': coords,
+          'location_name': locationName,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      return {
+        'success': false,
+        'error': 'Failed to submit location',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+  
+  /// Update user's location on server (so bot can get it)
+  static Future<bool> updateLocation({
+    required String userId,
+    required String coords,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/update-location'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'user_id': userId,
+          'coords': coords,
+        }),
+      );
+      
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  /// Save Telegram user ID locally
+  static Future<bool> saveTelegramUserId(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setString('telegram_user_id', userId);
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  /// Get saved Telegram user ID
+  static Future<String?> getTelegramUserId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('telegram_user_id');
+    } catch (e) {
+      return null;
     }
   }
 }

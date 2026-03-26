@@ -873,7 +873,7 @@ def get_all_campuses_api():
 @app.route('/api/share-location', methods=['POST'])
 def share_location_to_friend():
     """
-    API endpoint for the mobile app to share location to a friend
+    API endpoint for the mobile app to share location to a friend INSTANTLY
     Request body: {
         "sender_id": "telegram_user_id",
         "friend_username": "friend_username", 
@@ -889,14 +889,8 @@ def share_location_to_friend():
     location_name = data.get('location_name', 'Shared Location')
     sender_name = data.get('sender_name', 'A friend')
     
-    # Check for pending share request
+    # INSTANT SHARE: No need to check for pending shares - directly send to friend
     sender_id_int = int(sender_id) if sender_id else 0
-    pending = None
-    if sender_id_int in pending_shares:
-        pending = pending_shares[sender_id_int]
-        if pending.get('state') in ['waiting_location', 'waiting_location_from_app']:
-            friend_username = pending.get('friend_username', friend_username)
-            sender_name = pending.get('sender_name', sender_name)
     
     if not friend_username or not coords:
         return jsonify({
@@ -1005,6 +999,336 @@ def register_app_user():
     return jsonify({
         'success': True,
         'message': 'User registered successfully'
+    })
+
+
+@app.route('/api/location-request', methods=['GET'])
+def check_location_request():
+    """
+    App polls this endpoint to check if bot requested location
+    Query params: user_id (the Telegram user ID)
+    Returns: {"requested": true, "timestamp": ...} or {"requested": false}
+    """
+    user_id = request.args.get('user_id', '')
+    
+    if not user_id:
+        return jsonify({'requested': False})
+    
+    user_id_int = int(user_id) if user_id.isdigit() else 0
+    
+    # Check if there's a pending location request
+    if user_id_int in pending_shares:
+        share_data = pending_shares[user_id_int]
+        if share_data.get('state') == 'waiting_location_from_app':
+            return jsonify({
+                'requested': True,
+                'timestamp': share_data.get('timestamp', '').isoformat() if share_data.get('timestamp') else '',
+                'friend_username': share_data.get('friend_username', '')
+            })
+    
+    return jsonify({'requested': False})
+
+
+@app.route('/api/get-current-location', methods=['GET'])
+def get_current_location():
+    """
+    Get current location from a user (called by bot when sharing location)
+    Query params: user_id (the Telegram user ID)
+    Returns: {"coords": "lat,lng"} or {"error": "No location"}
+    """
+    user_id = request.args.get('user_id', '')
+    
+    # Check if user has registered their location
+    if user_id and user_id.isdigit():
+        user_id_int = int(user_id)
+        
+        # Check pending shares first
+        if user_id_int in pending_shares:
+            share_data = pending_shares[user_id_int]
+            if share_data.get('coords'):
+                return jsonify({'coords': share_data['coords']})
+        
+        # Check database for latest location
+        user = db.get_user(user_id=user_id_int)
+        if user and user.get('last_location'):
+            return jsonify({'coords': user['last_location']})
+    
+    # If no specific user location, try to find ANY user's last location
+    # This is a fallback for when app uses 'app_user' as ID
+    if user_id == 'app_user' or not user_id:
+        try:
+            # Get the most recent location from any user
+            from pymongo import DESCENDING
+            latest_user = db._db.users.find_one(
+                {'last_location': {'$exists': True, '$ne': ''}},
+                sort=[('location_updated_at', DESCENDING)]
+            )
+            if latest_user and latest_user.get('last_location'):
+                return jsonify({'coords': latest_user['last_location']})
+        except:
+            pass
+    
+    return jsonify({'error': 'No location available'}), 404
+
+
+@app.route('/api/update-location', methods=['POST'])
+def update_user_location():
+    """
+    App sends its current location to the server
+    Request body: {
+        "user_id": "telegram_user_id",
+        "coords": "lat,lng"
+    }
+    """
+    data = request.json
+    
+    user_id = data.get('user_id', '')
+    coords = data.get('coords', '')
+    
+    if not user_id or not coords:
+        return jsonify({'success': False, 'error': 'Missing user_id or coords'})
+    
+    user_id_int = int(user_id) if str(user_id).isdigit() else 0
+    
+    # Update user's location in database
+    db.update_user_location(user_id_int, coords)
+    
+    # Also update pending shares if any
+    if user_id_int in pending_shares:
+        pending_shares[user_id_int]['coords'] = coords
+    
+    return jsonify({'success': True})
+
+
+@app.route('/api/submit-location', methods=['POST'])
+def submit_location():
+    """
+    App sends location to this endpoint after bot requested it
+    """
+    data = request.json
+    
+    user_id = data.get('user_id', '')
+    coords = data.get('coords', '')
+    location_name = data.get('location_name', 'Current Location')
+    
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Missing user_id'})
+    
+    user_id_int = int(user_id) if str(user_id).isdigit() else 0
+    
+    # Check if there's a pending request
+    if user_id_int in pending_shares:
+        share_data = pending_shares[user_id_int]
+        if share_data.get('state') == 'waiting_location_from_app':
+            # Location received from app!
+            sender_id = share_data.get('sender_id')
+            sender_name = share_data.get('sender_name', 'Unknown')
+            friend_username = share_data.get('friend_username', '')
+            
+            # Clear pending request from app_user
+            del pending_shares[user_id_int]
+            
+            if sender_id:
+                if friend_username:
+                    # We have friend's username - send location directly to friend
+                    try:
+                        # Get friend's chat_id
+                        friend = db.get_user(username=friend_username)
+                        if friend and friend.get('chat_id'):
+                            chat_id = friend['chat_id']
+                            maps_url = f"https://www.google.com/maps?q={coords}"
+                            
+                            share_message = f"""
+📍 *Location Shared by Friend*
+
+👤 *From:* {sender_name}
+
+📍 *Location:* {location_name}
+📌 *Coordinates:* {coords}
+
+🗺️ [View on Google Maps]({maps_url})
+
+_Sent via UOG Navigator Bot_
+"""
+                            loop = asyncio.get_event_loop()
+                            loop.run_until_complete(application.bot.send_message(
+                                chat_id=chat_id,
+                                text=share_message,
+                                parse_mode='Markdown'
+                            ))
+                            
+                            # Notify sender
+                            try:
+                                import requests as req
+                                req.post(
+                                    f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage",
+                                    json={
+                                        'chat_id': sender_id,
+                                        'text': f"✅ *Location Sent!*\n\n"
+                                            f"📍 Sent to @{friend_username}\n"
+                                            f"📌 Coordinates: {coords}",
+                                        'parse_mode': 'Markdown'
+                                    }
+                                )
+                            except Exception as e:
+                                logger.error(f"Error notifying sender: {e}")
+                            
+                            return jsonify({'success': True, 'message': f'Location sent to @{friend_username}!'})
+                        else:
+                            # Friend not found in database
+                            try:
+                                import requests as req
+                                req.post(
+                                    f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage",
+                                    json={
+                                        'chat_id': sender_id,
+                                        'text': f"❌ *Could not send location!*\n\n"
+                                            f"User @{friend_username} has not started the bot yet.",
+                                        'parse_mode': 'Markdown'
+                                    }
+                                )
+                            except:
+                                pass
+                            return jsonify({'success': False, 'error': 'Friend has not started the bot'})
+                    except Exception as e:
+                        logger.error(f"Error sending location: {e}")
+                        return jsonify({'success': False, 'error': str(e)})
+                else:
+                    # No friend_username - ask user
+                    pending_shares[sender_id] = {
+                        'state': 'waiting_username_with_location',
+                        'coords': coords,
+                        'sender_name': sender_name,
+                        'timestamp': datetime.now()
+                    }
+                    
+                    try:
+                        import requests as req
+                        req.post(
+                            f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage",
+                            json={
+                                'chat_id': sender_id,
+                                'text': f"📍 *Location Received from App!*\n\n"
+                                    f"Your coordinates: {coords}\n\n"
+                                    f"Now, please reply with your friend's Telegram username (without @) to share it.\n"
+                                    f"Example: john_doe",
+                                'parse_mode': 'Markdown'
+                            }
+                        )
+                    except Exception as e:
+                        logger.error(f"Error asking for username: {e}")
+                    
+                    return jsonify({'success': True, 'message': 'Location received. Asking for username.'})
+            
+            return jsonify({'success': True, 'message': 'Location received.'})
+    
+    return jsonify({'success': False, 'error': 'No pending location request'})
+
+
+@app.route('/api/instant-share', methods=['POST'])
+def instant_share_location():
+    """
+    NEW: INSTANT LOCATION SHARE - Gets GPS from app and sends to friend immediately
+    This bypasses the Telegram bot polling mechanism
+    
+    Request body: {
+        "user_id": "telegram_user_id",
+        "friend_username": "friend_username",
+        "coords": "lat,lng",
+        "location_name": "Location Name",
+        "sender_name": "Sender Name"
+    }
+    """
+    data = request.json
+    
+    user_id = data.get('user_id', '')
+    friend_username = data.get('friend_username', '').strip().lower()
+    coords = data.get('coords', '')
+    location_name = data.get('location_name', 'My Current Location')
+    sender_name = data.get('sender_name', 'A friend')
+    
+    if not friend_username or not coords:
+        return jsonify({
+            'success': False, 
+            'error': 'Missing friend_username or coords'
+        }), 400
+    
+    user_id_int = int(user_id) if str(user_id).isdigit() else 0
+    
+    # Clear any pending share for this user
+    if user_id_int in pending_shares:
+        del pending_shares[user_id_int]
+    
+    # Get friend's chat_id
+    friend_chat_id = get_user_chat_id(friend_username)
+    
+    if not friend_chat_id:
+        return jsonify({
+            'success': False,
+            'error': f'User @{friend_username} has not started the bot yet'
+        }), 404
+    
+    # Create share record in MongoDB
+    share_id = db.create_location_share(
+        sender_id=user_id_int,
+        sender_name=sender_name,
+        friend_username=friend_username,
+        coords=coords,
+        location_name=location_name
+    )
+    
+    if not share_id:
+        return jsonify({
+            'success': False,
+            'error': 'Failed to create share record'
+        }), 500
+    
+    # Create share message
+    maps_url = f"https://www.google.com/maps?q={coords}"
+    
+    share_message = f"""
+📍 *Location Shared by Friend*
+
+👤 *From:* {sender_name}
+
+📍 *Location:* {location_name}
+📌 *Coordinates:* {coords}
+
+🗺️ [View on Google Maps]({maps_url})
+
+_Sent via UOG Navigator Bot_
+"""
+    
+    # Send message to friend's Telegram IMMEDIATELY
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    try:
+        loop.run_until_complete(application.bot.send_message(
+            chat_id=friend_chat_id,
+            text=share_message,
+            parse_mode='Markdown'
+        ))
+    except Exception as e:
+        logger.error(f"Error sending location to Telegram: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Failed to send to Telegram: {str(e)}'
+        }), 500
+    
+    return jsonify({
+        'success': True,
+        'message': f'Location sent to @{friend_username} instantly!',
+        'share_id': share_id,
+        'share_details': {
+            'to': friend_username,
+            'coords': coords,
+            'location_name': location_name,
+            'maps_url': maps_url
+        }
     })
 
 
@@ -1255,21 +1579,23 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif callback_data == 'share_location_start':
-        # Start share location flow - ask for friend's username
+        # Start share location flow - get location from app via API first
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name
         
-        # Use plain text without markdown to avoid parsing errors
-        await query.edit_message_text(
-            text="Share Your Current Location\n\n"
-                "Please enter your friend's Telegram username (without @)\n"
-                "Example: john_doe\n\n"
-                "WARNING: Your friend must have started the bot first!\n\n"
-                "Then send your location from Telegram."
-        )
+        # We put the request for user ID 0 so the hardcoded 'app_user' picks it up
+        pending_shares[0] = {
+            'state': 'waiting_location_from_app',
+            'sender_id': user_id,
+            'sender_name': username,
+            'timestamp': datetime.now()
+        }
         
-        # Store user as waiting for friend's username
-        pending_shares[user_id] = {'state': 'waiting_friend_username', 'sender_name': username, 'timestamp': datetime.now()}
+        await query.edit_message_text(
+            text="⏳ *Waiting for location...*\n\n"
+                "Please make sure the UOG Navigator app is open on your mobile device. I will automatically get your location coordinates.",
+            parse_mode='Markdown'
+        )
     
     elif callback_data.startswith('confirm_send_'):
         # Handle confirm send button click
@@ -1463,19 +1789,83 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
             
-            # Store friend's username and wait for location from app
-            pending_shares[user_id] = {
-                'state': 'waiting_location_from_app',
-                'friend_username': friend_username,
-                'sender_name': username,
-                'timestamp': datetime.now()
-            }
+            # Try to get location from app via API
+            coords = None
+            try:
+                import requests
+                # First try with user's actual ID
+                response = requests.get(f'{os.getenv("APP_API_URL", "http://127.0.0.1:5000")}/api/get-current-location?user_id={user_id}', timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    coords = data.get('coords')
+                
+                # If not found, try with 'app_user' as fallback
+                if not coords:
+                    response = requests.get(f'{os.getenv("APP_API_URL", "http://127.0.0.1:5000")}/api/get-current-location?user_id=app_user', timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        coords = data.get('coords')
+            except:
+                pass
             
-            await update.message.reply_text(
-                f"Friend Found: @{friend_username}\n\n"
-                    "Now please send your current location from Telegram.\n\n"
-                    "Tap the attachment button and select 'Location' to share your current position with your friend!"
-            )
+            if coords:
+                # Got location from app, send directly to friend
+                lat, lng = coords.split(',') if coords else (0, 0)
+                maps_link = f"https://www.google.com/maps?q={lat},{lng}"
+                
+                # Send location to friend
+                try:
+                    chat_id = friend.get('chat_id')
+                    if chat_id:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=f"Location from @{username}\n\n"
+                                f"Coordinates: {coords}\n"
+                                f"Map: {maps_link}"
+                        )
+                        
+                        # Confirm to sender
+                        await update.message.reply_text(
+                            text=f"Location sent to @{friend_username}!\n\n"
+                                f"Coordinates: {coords}\n"
+                                f"Map: {maps_link}"
+                        )
+                    else:
+                        await update.message.reply_text(
+                            text=f"Could not send to @{friend_username}. They may not have started the bot yet."
+                        )
+                except Exception as e:
+                    await update.message.reply_text(
+                        text=f"Error sending location: {str(e)}"
+                    )
+                
+                # Clear pending share
+                del pending_shares[user_id]
+            else:
+                # Can't get location from app, set state and tell user to open app
+                pending_shares[user_id] = {
+                    'state': 'waiting_location_from_app',
+                    'friend_username': friend_username,
+                    'sender_name': username,
+                    'sender_id': user_id,  # Store the sender's Telegram ID
+                    'timestamp': datetime.now()
+                }
+                
+                # ALSO store for app_user (ID 0) so the app can pick it up when polling
+                pending_shares[0] = {
+                    'state': 'waiting_location_from_app',
+                    'friend_username': friend_username,
+                    'sender_name': username,
+                    'sender_id': user_id,  # IMPORTANT: Store sender's Telegram ID so we can send to them later
+                    'timestamp': datetime.now()
+                }
+                
+                await update.message.reply_text(
+                    f"Friend Found: @{friend_username}\n\n"
+                        "📱 Please open the UOG Navigator app and share your location.\n\n"
+                        "I'll automatically get your current location from the app and send it to your friend!",
+                    parse_mode='Markdown'
+                )
             return
         
         if share_data.get('state') == 'waiting_username':
@@ -1504,39 +1894,95 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Generate Google Maps link
             maps_link = f"https://www.google.com/maps?q={lat},{lng}"
             
-            # Create inline keyboard with Confirm and Cancel buttons
-            keyboard = [
-                [InlineKeyboardButton("✅ Send Location", callback_data=f'confirm_send_{friend_username}_{coords}')],
-                [InlineKeyboardButton("❌ Cancel", callback_data='cancel_send')]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            # Send location directly to friend without asking for confirmation
+            try:
+                chat_id = friend.get('chat_id')
+                if chat_id:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"Location from @{username}\n\n"
+                            f"Coordinates: {coords}\n"
+                            f"Map: {maps_link}"
+                    )
+                    
+                    # Confirm to sender
+                    await update.message.reply_text(
+                        text=f"Location sent to @{friend_username}!\n\n"
+                            f"Coordinates: {coords}\n"
+                            f"Map: {maps_link}"
+                    )
+                else:
+                    await update.message.reply_text(
+                        text=f"Could not send to @{friend_username}. They may not have started the bot yet."
+                    )
+            except Exception as e:
+                await update.message.reply_text(
+                    text=f"Error sending location: {str(e)}"
+                )
             
-            # Show location preview with confirm button
-            await update.message.reply_text(
-                f"📍 *Location Ready to Send!*\n\n"
-                f"📱 *From:* @{username}\n"
-                f"📨 *To:* @{friend_username}\n"
-                f"📌 *Coordinates:* {coords}\n"
-                f"🔗 *Map Link:* {maps_link}\n\n"
-                f"Click 'Send Location' to share with your friend!",
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-            
-            # Store friend's username for callback
-            pending_shares[user_id] = {
-                'state': 'waiting_confirm',
-                'friend_username': friend_username,
-                'coords': coords,
-                'sender_name': username,
-                'timestamp': datetime.now()
-            }
+            # Clear pending share
+            del pending_shares[user_id]
             return
         
         elif share_data.get('state') == 'waiting_location':
             await update.message.reply_text(
-                "⏳ Please wait for the location from the app, or click /cancel to cancel."
+                "Please send your location from Telegram using the attachment button, or click /cancel to cancel."
             )
+            return
+        
+        if share_data.get('state') == 'waiting_username_with_location':
+            # Got location from app, now user enters friend's username
+            friend_username = text.strip()
+            if friend_username.startswith('@'):
+                friend_username = friend_username[1:]
+            friend_username = friend_username.lower()
+            
+            # Check if friend exists in database
+            friend = db.get_user(username=friend_username)
+            
+            if not friend:
+                await update.message.reply_text(
+                    f"User @{friend_username} not found!\n\n"
+                    f"Please make sure your friend has started the bot first."
+                )
+                del pending_shares[user_id]
+                return
+            
+            # Get the location coordinates that was stored
+            coords = share_data.get('coords', '')
+            lat, lng = coords.split(',') if coords else (0, 0)
+            
+            # Generate Google Maps link
+            maps_link = f"https://www.google.com/maps?q={lat},{lng}"
+            
+            # Send location directly to friend
+            try:
+                chat_id = friend.get('chat_id')
+                if chat_id:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"Location from @{username}\n\n"
+                            f"Coordinates: {coords}\n"
+                            f"Map: {maps_link}"
+                    )
+                    
+                    # Confirm to sender
+                    await update.message.reply_text(
+                        text=f"Location sent to @{friend_username}!\n\n"
+                            f"Coordinates: {coords}\n"
+                            f"Map: {maps_link}"
+                    )
+                else:
+                    await update.message.reply_text(
+                        text=f"Could not send to @{friend_username}. They may not have started the bot yet."
+                    )
+            except Exception as e:
+                await update.message.reply_text(
+                    text=f"Error sending location: {str(e)}"
+                )
+            
+            # Clear pending share
+            del pending_shares[user_id]
             return
     
     if text == '/start':
@@ -1680,6 +2126,87 @@ def main():
         
         # Run bot with polling - drop pending updates to avoid conflicts
         application.run_polling(drop_pending_updates=True)
+
+
+# ============================================================================
+# AI CHAT ASSISTANT ROUTES
+# ============================================================================
+
+# Import AI service
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from ai_service_template import AICampusAssistant
+    ai_assistant = AICampusAssistant(provider="aipipe")
+    print("✓ AI Campus Assistant initialized with AIPIPE API")
+except Exception as e:
+    print(f"✗ AI Assistant initialization failed: {e}")
+    ai_assistant = None
+
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    """Main AI chat endpoint for campus assistant"""
+    from flask import request, jsonify
+    
+    if ai_assistant is None:
+        return jsonify({
+            'success': False,
+            'error': 'AI Assistant not available'
+        }), 500
+    
+    data = request.get_json()
+    
+    if not data or 'message' not in data:
+        return jsonify({
+            'success': False,
+            'error': 'Message is required'
+        }), 400
+    
+    user_message = data['message']
+    user_location = data.get('location')  # Optional {lat, lng}
+    
+    result = ai_assistant.chat(user_message, user_location)
+    
+    return jsonify(result)
+
+@app.route('/api/ai/suggestions', methods=['GET'])
+def ai_suggestions():
+    """Get suggested questions for quick actions"""
+    from flask import jsonify
+    
+    if ai_assistant is None:
+        return jsonify({
+            'success': False,
+            'suggestions': [
+                "Where is the library?",
+                "How to get to Science Campus?",
+                "What are the cafeteria hours?",
+                "Where can I find WiFi?"
+            ]
+        })
+    
+    return jsonify({
+        'success': True,
+        'suggestions': ai_assistant._get_suggestions()
+    })
+
+@app.route('/api/ai/clear', methods=['POST'])
+def ai_clear():
+    """Clear conversation history"""
+    from flask import jsonify
+    
+    if ai_assistant is None:
+        return jsonify({
+            'success': False,
+            'error': 'AI Assistant not available'
+        }), 500
+    
+    ai_assistant.clear_history()
+    return jsonify({
+        'success': True,
+        'message': 'Conversation cleared'
+    })
 
 
 if __name__ == '__main__':

@@ -171,6 +171,18 @@ class Database:
             logger.error(f"Error updating chat_id: {e}")
             return False
     
+    def update_user_location(self, user_id: int, coords: str) -> bool:
+        """Update user's current GPS location."""
+        try:
+            self._db.users.update_one(
+                {'user_id': user_id},
+                {'$set': {'last_location': coords, 'location_updated_at': datetime.utcnow()}}
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error updating user location: {e}")
+            return False
+    
     # =========================================================================
     # LOCATION SHARING OPERATIONS
     # =========================================================================

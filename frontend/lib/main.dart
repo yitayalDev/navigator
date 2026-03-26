@@ -3,10 +3,12 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'bluetooth_service.dart';
 import 'location_share_service.dart';
 import 'shortest_path_service.dart';
+import 'screens/ai_chat_screen.dart';
 
 // Bot username for location sharing
 const String botUsername = 'UOGStudentNavBot';
@@ -832,6 +834,7 @@ class _CampusListPageState extends State<CampusListPage> {
   Position? _position;
   bool _isLoadingLocation = false;
   String? _locationError;
+  String? _pendingFriendUsername;
 
   @override
   void initState() {
@@ -840,6 +843,92 @@ class _CampusListPageState extends State<CampusListPage> {
     if (_position == null) {
       _getCurrentLocation();
     }
+    // Start polling for location requests from bot
+    _startLocationRequestPolling();
+  }
+
+  void _startLocationRequestPolling() {
+    // Poll every 2 seconds for location requests (faster response)
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        await _checkLocationRequest();
+      }
+      return mounted;
+    });
+  }
+
+  Future<void> _checkLocationRequest() async {
+    // Get the Telegram user ID (for demo, using a stored value)
+    final userId = await _getTelegramUserId();
+    if (userId == null) return;
+
+    try {
+      final response = await ApiService.checkLocationRequest(userId);
+      if (response != null && response['requested'] == true) {
+        // We use a dummy pending value to avoid multiple rapid responses
+        if (_pendingFriendUsername == null) {
+          // Bot requested location, get current GPS and send to server
+          _pendingFriendUsername = 'pending';
+          await _respondToLocationRequest(userId);
+        }
+      }
+    } catch (e) {
+      // Ignore polling errors
+    }
+  }
+
+  Future<String?> _getTelegramUserId() async {
+    // Hardcoded Telegram user ID for the app
+    return 'app_user';
+  }
+
+  Future<void> _respondToLocationRequest(String userId) async {
+    // Get location using the improved location service
+    Position? position = _position;
+    if (position == null) {
+      position = await LocationShareService.getCurrentLocation();
+    }
+    
+    if (position != null) {
+      final coords = '${position.latitude},${position.longitude}';
+      final result = await ApiService.submitLocation(
+        userId: userId,
+        coords: coords,
+        locationName: 'My Current Location',
+      );
+      
+      if (result != null && result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Location shared: $coords'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Failed: ${result?['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Could not get GPS location'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+    
+    _pendingFriendUsername = null;
   }
 
   Future<void> _getCurrentLocation() async {
@@ -853,24 +942,33 @@ class _CampusListPageState extends State<CampusListPage> {
       _isLoadingLocation = false;
       if (position != null) {
         _position = position;
+        
+        // Send location to server so bot can get it
+        _updateServerLocation('${position.latitude},${position.longitude}');
       } else {
         _locationError = 'Could not get location';
       }
     });
   }
+  
+  // Update server with current location (so bot can get it when needed)
+  Future<void> _updateServerLocation(String coords) async {
+    // Get hardcoded Telegram user ID
+    final userId = 'app_user';
+    
+    try {
+      await ApiService.updateLocation(
+        userId: userId,
+        coords: coords,
+      );
+    } catch (e) {
+      // Silently fail - location update is not critical
+    }
+  }
+  
 
   /// Share current GPS location to a friend
   void _shareCurrentLocation() async {
-    if (_position == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please get your location first'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-    
     // Show dialog to get friend's username
     final friendUsernameController = TextEditingController();
     
@@ -917,16 +1015,33 @@ class _CampusListPageState extends State<CampusListPage> {
               
               Navigator.pop(context);
               
-              // Show loading
+              // Show loading indicator
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Sharing location...'),
+                  content: Text('📍 Getting your location and sharing...'),
                   backgroundColor: Colors.blue,
+                  duration: Duration(seconds: 10),
                 ),
               );
               
-              // Share the location
-              final coords = '${_position!.latitude},${_position!.longitude}';
+              // Get current GPS location instantly
+              Position? position = _position;
+              if (position == null) {
+                position = await LocationShareService.getCurrentLocation();
+              }
+              
+              if (position == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('❌ Could not get your location. Please enable GPS.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              
+              // Share the location immediately
+              final coords = '${position.latitude},${position.longitude}';
               final result = await ApiService.shareLocationToFriend(
                 senderId: 'app_user',
                 friendUsername: friendUsername,
@@ -938,7 +1053,7 @@ class _CampusListPageState extends State<CampusListPage> {
               if (result != null && result['success'] == true) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('✅ Location shared with @$friendUsername!'),
+                    content: Text('✅ Location sent to @$friendUsername!\n📍 $coords'),
                     backgroundColor: Colors.green,
                   ),
                 );
@@ -955,7 +1070,7 @@ class _CampusListPageState extends State<CampusListPage> {
               backgroundColor: const Color(0xFF0088CC),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Share'),
+            child: const Text('Share Location'),
           ),
         ],
       ),
@@ -1012,6 +1127,7 @@ class _CampusListPageState extends State<CampusListPage> {
                 onPressed: _isLoadingLocation ? null : _getCurrentLocation,
                 tooltip: 'Get my location',
               ),
+
             ],
             flexibleSpace: FlexibleSpaceBar(
               title: const Text(
@@ -1140,6 +1256,20 @@ class _CampusListPageState extends State<CampusListPage> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.my_location, color: Color(0xFF1E88E5)),
+          ),
+          const SizedBox(height: 8),
+          // AI Campus Assistant FAB
+          FloatingActionButton.extended(
+            heroTag: 'ai_chat',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AIChatScreen()),
+              );
+            },
+            icon: const Icon(Icons.smart_toy_outlined),
+            label: const Text('AI Assistant'),
+            backgroundColor: const Color(0xFF6750A4),
           ),
           const SizedBox(height: 8),
           // Telegram Bot FAB
@@ -1494,31 +1624,51 @@ class _CampusDetailPageState extends State<CampusDetailPage> {
           _buildLocationList(),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          // Get fresh location before navigating
-          final pos = await LocationService.getCurrentLocation();
-          final currentPos = pos ?? _position;
-          
-          if (currentPos != null) {
-            final origin = '${currentPos.latitude},${currentPos.longitude}';
-            final destination = '${widget.campus.lat},${widget.campus.lng}';
-            final uri = Uri.parse(
-              'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&travelmode=walking',
-            );
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          } else {
-            // Fallback to just destination if no current location
-            final destination = '${widget.campus.lat},${widget.campus.lng}';
-            final uri = Uri.parse(
-              'https://www.google.com/maps/dir/?api=1&destination=$destination&travelmode=walking',
-            );
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        },
-        icon: const Icon(Icons.directions_walk),
-        label: const Text('Navigate to Campus'),
-        backgroundColor: widget.campus.color,
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // AI Assistant FAB
+          FloatingActionButton.small(
+            heroTag: 'ai_chat_campus',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AIChatScreen()),
+              );
+            },
+            backgroundColor: const Color(0xFF6750A4),
+            child: const Icon(Icons.smart_toy_outlined, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          // Navigate to Campus FAB
+          FloatingActionButton.extended(
+            heroTag: 'navigate',
+            onPressed: () async {
+              // Get fresh location before navigating
+              final pos = await LocationService.getCurrentLocation();
+              final currentPos = pos ?? _position;
+              
+              if (currentPos != null) {
+                final origin = '${currentPos.latitude},${currentPos.longitude}';
+                final destination = '${widget.campus.lat},${widget.campus.lng}';
+                final uri = Uri.parse(
+                  'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&travelmode=walking',
+                );
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              } else {
+                // Fallback to just destination if no current location
+                final destination = '${widget.campus.lat},${widget.campus.lng}';
+                final uri = Uri.parse(
+                  'https://www.google.com/maps/dir/?api=1&destination=$destination&travelmode=walking',
+                );
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+            icon: const Icon(Icons.directions_walk),
+            label: const Text('Navigate to Campus'),
+            backgroundColor: widget.campus.color,
+          ),
+        ],
       ),
     );
   }
@@ -2178,35 +2328,55 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
               
               Navigator.pop(context);
               
-              // Show loading
+              // Show loading with instant sharing message
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Sharing location...'),
+                  content: Text('📍 Getting GPS and sharing instantly...'),
                   backgroundColor: Colors.blue,
+                  duration: Duration(seconds: 10),
                 ),
               );
               
-              // Share the location
-              final coords = '${location.lat},${location.lng}';
+              // Get current GPS location instantly
+              Position? position = _userPosition;
+              if (position == null) {
+                position = await LocationShareService.getCurrentLocation();
+              }
+              
+              // Use the specific location OR current GPS location
+              String coords;
+              String locationName;
+              
+              if (position != null) {
+                // Use current GPS location
+                coords = '${position.latitude},${position.longitude}';
+                locationName = 'My Current Location';
+              } else {
+                // Fallback to selected location
+                coords = '${location.lat},${location.lng}';
+                locationName = location.name;
+              }
+              
+              // Share the location immediately
               final result = await ApiService.shareLocationToFriend(
                 senderId: 'app_user',
                 friendUsername: friendUsername,
                 coords: coords,
-                locationName: location.name,
+                locationName: locationName,
                 senderName: 'UOG Navigator User',
               );
               
               if (result != null && result['success'] == true) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('✅ Location shared with @$friendUsername!'),
+                    content: Text('✅ Location sent to @$friendUsername!\n📍 $coords'),
                     backgroundColor: Colors.green,
                   ),
                 );
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('❌ Failed to share: ${result?['error'] ?? 'Unknown error'}'),
+                    content: Text('❌ Failed: ${result?['error'] ?? 'Unknown error'}'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -2216,7 +2386,7 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
               backgroundColor: const Color(0xFF0088CC),
               foregroundColor: Colors.white,
             ),
-            child: const Text('Share'),
+            child: const Text('Share My GPS Location'),
           ),
         ],
       ),
@@ -2693,21 +2863,41 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
         ],
       ),
 
-      // Get My Location FAB button
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isGettingLocation ? null : _getUserLocation,
-        backgroundColor: widget.campus.color,
-        icon: _isGettingLocation
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(Icons.my_location),
-        label: Text(_isGettingLocation ? 'Getting Location...' : 'Get My Location'),
+      // FAB buttons
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // AI Assistant FAB
+          FloatingActionButton.small(
+            heroTag: 'ai_chat_map',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AIChatScreen()),
+              );
+            },
+            backgroundColor: const Color(0xFF6750A4),
+            child: const Icon(Icons.smart_toy_outlined, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          // Get My Location FAB button
+          FloatingActionButton.extended(
+            heroTag: 'my_location',
+            onPressed: _isGettingLocation ? null : _getUserLocation,
+            backgroundColor: widget.campus.color,
+            icon: _isGettingLocation
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.my_location),
+            label: Text(_isGettingLocation ? 'Getting Location...' : 'Get My Location'),
+          ),
+        ],
       ),
     );
   }
