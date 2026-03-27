@@ -1,9 +1,9 @@
 {
-  "project": "uog_student_navigator",
+  "project": "uog_navigator",
   "platform": "ios",
   "github": {
-    "owner": "zufunega-hue",
-    "repo": "uog_navigetor"
+    "owner": "yitayalDev",
+    "repo": "navigator"
   },
   "ios": {
     "path": "frontend/ios"
