@@ -1,4 +1,4 @@
-"""
+﻿"""
 Advanced AI Chat Server with RAG (Retrieval-Augmented Generation)
 University of Gondar Navigator - Uses MongoDB data + AIPIPE API
 """

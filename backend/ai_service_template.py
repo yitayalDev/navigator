@@ -189,11 +189,12 @@ Keep it concise (under 200 words) and friendly. Include emojis where appropriate
                 "temperature": 0.7
             }
             
+            # Use shorter timeout to avoid hanging - faster fallback
             response = requests.post(
                 f"{self.aipipe_base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=60  # Increased timeout
+                timeout=10  # Reduced from 60 to 10 seconds for faster fallback
             )
             
             if response.status_code == 200:

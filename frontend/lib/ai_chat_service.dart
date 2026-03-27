@@ -5,28 +5,37 @@ import 'package:http/http.dart' as http;
 /// Handles communication with the backend AI assistant
 
 class AIChatService {
-  // Use port 5001 for standalone AI server, 5000 for full server
+  // Use port 5000 for full server (with AI), 5001 for standalone AI server
   // Update IP to your computer's IP for physical device
-  static const String baseUrl = 'http://192.168.137.1:5001';
+  static const String baseUrl = 'http://192.168.137.1:5000';
   
   /// Send a message to the AI assistant
   static Future<AIChatResponse?> sendMessage(String message, {String? userId}) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/ai/chat'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'message': message,
-          'user_id': userId,
-        }),
-      );
+      // Use a client with timeout to prevent hanging
+      final client = http.Client();
       
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return AIChatResponse.fromJson(data);
+      try {
+        final response = await client.post(
+          Uri.parse('$baseUrl/api/ai/chat'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'message': message,
+            'user_id': userId,
+          }),
+        ).timeout(const Duration(seconds: 30));
+        
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          return AIChatResponse.fromJson(data);
+        }
+        
+        print('AI Chat response status: ${response.statusCode}');
+        print('AI Chat response body: ${response.body}');
+        return null;
+      } finally {
+        client.close();
       }
-      
-      return null;
     } catch (e) {
       print('AI Chat Error: $e');
       return null;
@@ -63,6 +72,30 @@ class AIChatService {
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+  
+  /// Check AI health/status
+  static Future<Map<String, dynamic>?> checkHealth() async {
+    try {
+      final client = http.Client();
+      
+      try {
+        final response = await client.get(
+          Uri.parse('$baseUrl/api/ai/health'),
+        ).timeout(const Duration(seconds: 10));
+        
+        if (response.statusCode == 200) {
+          return json.decode(response.body);
+        }
+        
+        return null;
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      print('AI Health Check Error: $e');
+      return null;
     }
   }
   

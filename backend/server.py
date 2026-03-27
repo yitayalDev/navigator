@@ -1,4 +1,4 @@
-"""
+﻿"""
 UOG Student Navigation Flask Server
 Handles API requests from the mobile app and Telegram bot webhooks
 """
@@ -152,21 +152,21 @@ def get_user_chat_id(identifier):
 def get_category_emoji(category: str) -> str:
     """Get emoji for category."""
     emojis = {
-        'building': '🏢',
-        'cafe': '☕',
-        'library': '📚',
-        'lecture_hall': '🎓',
-        'lab': '🔬',
-        'laboratory': '🔬'
+        'building': 'ðŸ¢',
+        'cafe': 'â˜•',
+        'library': 'ðŸ“š',
+        'lecture_hall': 'ðŸŽ“',
+        'lab': 'ðŸ”¬',
+        'laboratory': 'ðŸ”¬'
     }
-    return emojis.get(category, '📍')
+    return emojis.get(category, 'ðŸ“')
 
 
 def get_category_display_name(category: str) -> str:
     """Get display name for category."""
     names = {
         'building': 'Buildings',
-        'cafe': 'Cafés & Food',
+        'cafe': 'CafÃ©s & Food',
         'library': 'Libraries',
         'lecture_hall': 'Lecture Halls',
         'lab': 'Labs',
@@ -509,7 +509,7 @@ def admin_categories():
             categories.append({
                 'name': cat_name,
                 'description': cat.get('description', ''),
-                'icon': cat.get('icon', '📍'),
+                'icon': cat.get('icon', 'ðŸ“'),
                 'color': cat.get('color', '#3498db'),
                 'count': cat_dict.get(cat_name, 0)
             })
@@ -522,7 +522,7 @@ def admin_categories():
                 categories.append({
                     'name': loc_cat,
                     'description': '',
-                    'icon': '📍',
+                    'icon': 'ðŸ“',
                     'color': '#3498db',
                     'count': cat_dict.get(loc_cat, 0)
                 })
@@ -540,7 +540,7 @@ def admin_categories():
         try:
             name = request.form.get('name', '').strip().lower()
             description = request.form.get('description', '')
-            icon = request.form.get('icon', '📍')
+            icon = request.form.get('icon', 'ðŸ“')
             color = request.form.get('color', '#3498db')
             
             if name:
@@ -926,14 +926,14 @@ def share_location_to_friend():
     maps_url = f"https://www.google.com/maps?q={coords}"
     
     share_message = f"""
-📍 *Location Shared by Friend*
+ðŸ“ *Location Shared by Friend*
 
-👤 *From:* {sender_name}
+ðŸ‘¤ *From:* {sender_name}
 
-📍 *Location:* {location_name}
-📌 *Coordinates:* {coords}
+ðŸ“ *Location:* {location_name}
+ðŸ“Œ *Coordinates:* {coords}
 
-🗺️ [View on Google Maps]({maps_url})
+ðŸ—ºï¸ [View on Google Maps]({maps_url})
 
 _Sent via UOG Navigator Bot_
 """
@@ -1139,14 +1139,14 @@ def submit_location():
                             maps_url = f"https://www.google.com/maps?q={coords}"
                             
                             share_message = f"""
-📍 *Location Shared by Friend*
+ðŸ“ *Location Shared by Friend*
 
-👤 *From:* {sender_name}
+ðŸ‘¤ *From:* {sender_name}
 
-📍 *Location:* {location_name}
-📌 *Coordinates:* {coords}
+ðŸ“ *Location:* {location_name}
+ðŸ“Œ *Coordinates:* {coords}
 
-🗺️ [View on Google Maps]({maps_url})
+ðŸ—ºï¸ [View on Google Maps]({maps_url})
 
 _Sent via UOG Navigator Bot_
 """
@@ -1164,9 +1164,9 @@ _Sent via UOG Navigator Bot_
                                     f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage",
                                     json={
                                         'chat_id': sender_id,
-                                        'text': f"✅ *Location Sent!*\n\n"
-                                            f"📍 Sent to @{friend_username}\n"
-                                            f"📌 Coordinates: {coords}",
+                                        'text': f"âœ… *Location Sent!*\n\n"
+                                            f"ðŸ“ Sent to @{friend_username}\n"
+                                            f"ðŸ“Œ Coordinates: {coords}",
                                         'parse_mode': 'Markdown'
                                     }
                                 )
@@ -1182,7 +1182,7 @@ _Sent via UOG Navigator Bot_
                                     f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage",
                                     json={
                                         'chat_id': sender_id,
-                                        'text': f"❌ *Could not send location!*\n\n"
+                                        'text': f"âŒ *Could not send location!*\n\n"
                                             f"User @{friend_username} has not started the bot yet.",
                                         'parse_mode': 'Markdown'
                                     }
@@ -1208,7 +1208,7 @@ _Sent via UOG Navigator Bot_
                             f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage",
                             json={
                                 'chat_id': sender_id,
-                                'text': f"📍 *Location Received from App!*\n\n"
+                                'text': f"ðŸ“ *Location Received from App!*\n\n"
                                     f"Your coordinates: {coords}\n\n"
                                     f"Now, please reply with your friend's Telegram username (without @) to share it.\n"
                                     f"Example: john_doe",
@@ -1287,14 +1287,14 @@ def instant_share_location():
     maps_url = f"https://www.google.com/maps?q={coords}"
     
     share_message = f"""
-📍 *Location Shared by Friend*
+ðŸ“ *Location Shared by Friend*
 
-👤 *From:* {sender_name}
+ðŸ‘¤ *From:* {sender_name}
 
-📍 *Location:* {location_name}
-📌 *Coordinates:* {coords}
+ðŸ“ *Location:* {location_name}
+ðŸ“Œ *Coordinates:* {coords}
 
-🗺️ [View on Google Maps]({maps_url})
+ðŸ—ºï¸ [View on Google Maps]({maps_url})
 
 _Sent via UOG Navigator Bot_
 """
@@ -1348,30 +1348,30 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [
-            InlineKeyboardButton("📤 Share Current Location", callback_data='share_location_start'),
+            InlineKeyboardButton("ðŸ“¤ Share Current Location", callback_data='share_location_start'),
         ],
         [
-            InlineKeyboardButton("🏫 Maraki Campus", callback_data='campus_maraki'),
+            InlineKeyboardButton("ðŸ« Maraki Campus", callback_data='campus_maraki'),
         ],
         [
-            InlineKeyboardButton("🏢 Tewodros Campus", callback_data='campus_tewodros'),
+            InlineKeyboardButton("ðŸ¢ Tewodros Campus", callback_data='campus_tewodros'),
         ],
         [
-            InlineKeyboardButton("🏥 Fasil Campus", callback_data='campus_fasil'),
+            InlineKeyboardButton("ðŸ¥ Fasil Campus", callback_data='campus_fasil'),
         ],
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     welcome_message = """
-🏛️ *Welcome to UOG Student Navigation Bot!*
+ðŸ›ï¸ *Welcome to UOG Student Navigation Bot!*
 
 I can help you navigate the University of Gondar campuses.
 
 *What would you like to do?*
-• 📤 Share your current location with friends
-• 🏫 Explore campus locations and buildings
-• 🗺️ Get directions to campus locations
+â€¢ ðŸ“¤ Share your current location with friends
+â€¢ ðŸ« Explore campus locations and buildings
+â€¢ ðŸ—ºï¸ Get directions to campus locations
 """
     
     await update.message.reply_text(
@@ -1384,7 +1384,7 @@ I can help you navigate the University of Gondar campuses.
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command"""
     help_message = """
-📚 *Available Commands:*
+ðŸ“š *Available Commands:*
 
 /start - Start the bot
 /menu - Show main menu
@@ -1394,20 +1394,20 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /cafes - Show only cafes
 /libraries - Show only libraries
 
-📤 *Share Location:*
+ðŸ“¤ *Share Location:*
 Use /menu and click "Share My Location" button!
 
-🔹 *Campus Codes:*
-• maraki - Main Campus
-• tewodros - Tewodros Campus  
-• fasil - Fasil Campus
+ðŸ”¹ *Campus Codes:*
+â€¢ maraki - Main Campus
+â€¢ tewodros - Tewodros Campus  
+â€¢ fasil - Fasil Campus
 """
     await update.message.reply_text(help_message, parse_mode='Markdown')
 
 
 async def locations_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show all locations"""
-    message = "📍 *All University Locations:*\n\n"
+    message = "ðŸ“ *All University Locations:*\n\n"
     
     # Get locations from MongoDB
     locations = db.get_campus_locations()
@@ -1417,7 +1417,7 @@ async def locations_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for loc in locations:
         emoji = get_category_emoji(loc['category'])
         message += f"{emoji} *{loc['name']}*\n"
-        message += f"   📌 {loc['campus'].title()} Campus\n\n"
+        message += f"   ðŸ“Œ {loc['campus'].title()} Campus\n\n"
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
@@ -1428,23 +1428,23 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [
-            InlineKeyboardButton("📤 Share Current Location", callback_data='share_location_start'),
+            InlineKeyboardButton("ðŸ“¤ Share Current Location", callback_data='share_location_start'),
         ],
         [
-            InlineKeyboardButton("🏫 Maraki Campus", callback_data='campus_maraki'),
+            InlineKeyboardButton("ðŸ« Maraki Campus", callback_data='campus_maraki'),
         ],
         [
-            InlineKeyboardButton("🏢 Tewodros Campus", callback_data='campus_tewodros'),
+            InlineKeyboardButton("ðŸ¢ Tewodros Campus", callback_data='campus_tewodros'),
         ],
         [
-            InlineKeyboardButton("🏥 Fasil Campus", callback_data='campus_fasil'),
+            InlineKeyboardButton("ðŸ¥ Fasil Campus", callback_data='campus_fasil'),
         ],
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        "🏛️ *UOG Student Navigation*\n\n*What would you like to do?*\n• 📤 Share your current location\n• 🏫 Explore campus locations",
+        "ðŸ›ï¸ *UOG Student Navigation*\n\n*What would you like to do?*\nâ€¢ ðŸ“¤ Share your current location\nâ€¢ ðŸ« Explore campus locations",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -1485,11 +1485,11 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ])
             
             keyboard.append([
-                InlineKeyboardButton("🔙 Back to Campuses", callback_data='back_campuses')
+                InlineKeyboardButton("ðŸ”™ Back to Campuses", callback_data='back_campuses')
             ])
             
-            message = f"🏛️ *{campus_info.get('name', campus_id.title())} Campus*\n\n"
-            message += f"📊 Total locations: {len(locations)}\n\n"
+            message = f"ðŸ›ï¸ *{campus_info.get('name', campus_id.title())} Campus*\n\n"
+            message += f"ðŸ“Š Total locations: {len(locations)}\n\n"
             message += "*Select a category:*"
             
             await query.edit_message_text(
@@ -1518,17 +1518,17 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for loc in locations:
                     keyboard.append([
                         InlineKeyboardButton(
-                            f"📍 {loc['name']}", 
+                            f"ðŸ“ {loc['name']}", 
                             callback_data=f'location_{loc["name"]}'
                         )
                     ])
                 
                 keyboard.append([
-                    InlineKeyboardButton(f"🔙 Back", callback_data=f'campus_{campus_id}')
+                    InlineKeyboardButton(f"ðŸ”™ Back", callback_data=f'campus_{campus_id}')
                 ])
                 
                 message = f"{emoji} *{category_display} in {campus_info.get('name', campus_id.title())} Campus*\n\n"
-                message += f"📊 {len(locations)} location(s)\n\n"
+                message += f"ðŸ“Š {len(locations)} location(s)\n\n"
                 message += "Select a location:"
                 
                 await query.edit_message_text(
@@ -1550,13 +1550,13 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 maps_url = f"https://www.google.com/maps/search/?api=1&query={loc['coords']}"
                 
                 message = f"""
-📍 *{loc['name']}*
+ðŸ“ *{loc['name']}*
 
-🏛️ Campus: {loc['campus'].title()}
-📝 {loc['description']}
-📌 Coordinates: {loc['coords']}
+ðŸ›ï¸ Campus: {loc['campus'].title()}
+ðŸ“ {loc['description']}
+ðŸ“Œ Coordinates: {loc['coords']}
 
-[📍 View on Google Maps]({maps_url})
+[ðŸ“ View on Google Maps]({maps_url})
 """
                 
                 await query.edit_message_text(
@@ -1567,13 +1567,13 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif callback_data == 'back_campuses':
         keyboard = [
-            [InlineKeyboardButton("🏫 Maraki Campus", callback_data='campus_maraki')],
-            [InlineKeyboardButton("🏢 Tewodros Campus", callback_data='campus_tewodros')],
-            [InlineKeyboardButton("🏥 Fasil Campus", callback_data='campus_fasil')],
+            [InlineKeyboardButton("ðŸ« Maraki Campus", callback_data='campus_maraki')],
+            [InlineKeyboardButton("ðŸ¢ Tewodros Campus", callback_data='campus_tewodros')],
+            [InlineKeyboardButton("ðŸ¥ Fasil Campus", callback_data='campus_fasil')],
         ]
         
         await query.edit_message_text(
-            text="🏛️ *Select a Campus:*",
+            text="ðŸ›ï¸ *Select a Campus:*",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -1592,7 +1592,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         
         await query.edit_message_text(
-            text="⏳ *Waiting for location...*\n\n"
+            text="â³ *Waiting for location...*\n\n"
                 "Please make sure the UOG Navigator app is open on your mobile device. I will automatically get your location coordinates.",
             parse_mode='Markdown'
         )
@@ -1622,10 +1622,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         # Send to friend
                         await context.bot.send_message(
                             chat_id=chat_id,
-                            text=f"📍 *Location Shared by Friend*\n\n"
-                                f"📱 *From:* @{sender_name}\n"
-                                f"📌 *Coordinates:* {coords}\n"
-                                f"🔗 *Map Link:* {maps_link}",
+                            text=f"ðŸ“ *Location Shared by Friend*\n\n"
+                                f"ðŸ“± *From:* @{sender_name}\n"
+                                f"ðŸ“Œ *Coordinates:* {coords}\n"
+                                f"ðŸ”— *Map Link:* {maps_link}",
                             parse_mode='Markdown'
                         )
                         
@@ -1647,7 +1647,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
             except Exception as e:
                 await query.edit_message_text(
-                    text=f"❌ Error sending location: {str(e)}",
+                    text=f"âŒ Error sending location: {str(e)}",
                     parse_mode='Markdown'
                 )
             
@@ -1663,7 +1663,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del pending_shares[user_id]
         
         await query.edit_message_text(
-            text="❌ *Share Location Cancelled*\n\n"
+            text="âŒ *Share Location Cancelled*\n\n"
                 "Your location was not sent to anyone.",
             parse_mode='Markdown'
         )
@@ -1690,11 +1690,11 @@ async def handle_location_message(update: Update, context: ContextTypes.DEFAULT_
             
             # Ask for friend's username
             await update.message.reply_text(
-                f"📍 *Location Received!*\n\n"
+                f"ðŸ“ *Location Received!*\n\n"
                 f"Your location: {coords}\n\n"
                 f"Now please reply with your friend's Telegram username (without @)\n"
                 f"Example: john_doe\n\n"
-                f"⚠️ Your friend must have started the bot first!",
+                f"âš ï¸ Your friend must have started the bot first!",
                 parse_mode='Markdown'
             )
             
@@ -1729,10 +1729,10 @@ async def handle_location_message(update: Update, context: ContextTypes.DEFAULT_
             try:
                 await context.bot.send_message(
                     chat_id=friend['user_id'],
-                    text=f"📍 *Location from @{sender_name}*\n\n"
-                        f"📱 *From:* @{sender_name}\n"
-                        f"📌 *Coordinates:* {coords}\n"
-                        f"🔗 *Map Link:* {maps_link}",
+                    text=f"ðŸ“ *Location from @{sender_name}*\n\n"
+                        f"ðŸ“± *From:* @{sender_name}\n"
+                        f"ðŸ“Œ *Coordinates:* {coords}\n"
+                        f"ðŸ”— *Map Link:* {maps_link}",
                     parse_mode='Markdown'
                 )
                 
@@ -1755,7 +1755,7 @@ async def handle_location_message(update: Update, context: ContextTypes.DEFAULT_
     
     # If not in share mode, just acknowledge
     await update.message.reply_text(
-        "📍 Thank you for sharing your location!\n\n"
+        "ðŸ“ Thank you for sharing your location!\n\n"
         "Use /menu to see available options."
     )
 
@@ -1782,7 +1782,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if not friend:
                 await update.message.reply_text(
-                    f"❌ User @{friend_username} not found!\n\n"
+                    f"âŒ User @{friend_username} not found!\n\n"
                     f"Please make sure your friend has started the bot first.\n"
                     f"Type /cancel to try again.",
                     parse_mode='Markdown'
@@ -1862,7 +1862,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await update.message.reply_text(
                     f"Friend Found: @{friend_username}\n\n"
-                        "📱 Please open the UOG Navigator app and share your location.\n\n"
+                        "ðŸ“± Please open the UOG Navigator app and share your location.\n\n"
                         "I'll automatically get your current location from the app and send it to your friend!",
                     parse_mode='Markdown'
                 )
@@ -1880,7 +1880,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if not friend:
                 await update.message.reply_text(
-                    f"❌ User @{friend_username} not found!\n\n"
+                    f"âŒ User @{friend_username} not found!\n\n"
                     f"Please make sure your friend has started the bot first.",
                     parse_mode='Markdown'
                 )
@@ -1996,7 +1996,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == '/cancel':
         if user_id in pending_shares:
             del pending_shares[user_id]
-        await update.message.reply_text("❌ Share location cancelled.")
+        await update.message.reply_text("âŒ Share location cancelled.")
     else:
         # Search for location in MongoDB
         text_lower = text.lower()
@@ -2008,7 +2008,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if text_lower in loc['name'].lower():
                 maps_url = f"https://www.google.com/maps/search/?api=1&query={loc['coords']}"
                 await update.message.reply_text(
-                    f"📍 *{loc['name']}*\n\n"
+                    f"ðŸ“ *{loc['name']}*\n\n"
                     f"Campus: {loc['campus'].title()}\n"
                     f"Coordinates: {loc['coords']}\n\n"
                     f"[View on Maps]({maps_url})",
@@ -2017,7 +2017,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
         
         await update.message.reply_text(
-            "❓ Use /locations to see all places or /help for commands."
+            "â“ Use /locations to see all places or /help for commands."
         )
 
 
@@ -2120,7 +2120,7 @@ def main():
         # Polling mode (for local development)
         # Start Flask in background thread
         import threading
-        flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False))
+        flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, threaded=True))
         flask_thread.daemon = True
         flask_thread.start()
         
@@ -2139,36 +2139,83 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from ai_service_template import AICampusAssistant
     ai_assistant = AICampusAssistant(provider="aipipe")
-    print("✓ AI Campus Assistant initialized with AIPIPE API")
+    print("âœ“ AI Campus Assistant initialized with AIPIPE API")
 except Exception as e:
-    print(f"✗ AI Assistant initialization failed: {e}")
+    print(f"âœ— AI Assistant initialization failed: {e}")
     ai_assistant = None
 
 @app.route('/api/ai/chat', methods=['POST'])
 def ai_chat():
     """Main AI chat endpoint for campus assistant"""
+    global ai_assistant
     from flask import request, jsonify
     
+    # Debug: Check if AI assistant is available
+    print(f"[DEBUG] AI Chat request received, ai_assistant type: {type(ai_assistant)}")
+    
     if ai_assistant is None:
+        print("[DEBUG] AI Assistant is None, attempting to reinitialize...")
+        # Try to reinitialize
+        try:
+            from ai_service_template import AICampusAssistant
+            ai_assistant = AICampusAssistant(provider="aipipe")
+            print(f"[DEBUG] AI reinitialized, provider: {ai_assistant.provider}")
+        except Exception as e:
+            print(f"[DEBUG] Failed to reinitialize AI: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'AI Assistant not available',
+                'details': str(e)
+            }), 500
+    
+    # Check if provider is fallback (meaning API token wasn't found)
+    if ai_assistant.provider == "fallback":
+        print("[DEBUG] AI using fallback mode - local keyword responses")
+    else:
+        print(f"[DEBUG] AI using provider: {ai_assistant.provider}")
+    
+    try:
+        data = request.get_json()
+        
+        if not data or 'message' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Message is required'
+            }), 400
+        
+        user_message = data['message']
+        user_location = data.get('location')  # Optional {lat, lng}
+        
+        print(f"[DEBUG] Processing message: {user_message[:50]}...")
+        result = ai_assistant.chat(user_message, user_location)
+        
+        print(f"[DEBUG] AI response generated, success: {result.get('success')}")
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"[ERROR] Error in ai_chat: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': 'AI Assistant not available'
+            'error': str(e),
+            'response': 'Sorry, I encountered an error. Please try again.'
         }), 500
+
+
+@app.route('/api/ai/health', methods=['GET'])
+def ai_health():
+    """Health check for AI endpoint - useful for debugging connectivity"""
+    from flask import jsonify
     
-    data = request.get_json()
+    status = {
+        'status': 'ok',
+        'ai_available': ai_assistant is not None,
+        'provider': ai_assistant.provider if ai_assistant else 'none',
+        'token_available': bool(ai_assistant.aipipe_token) if ai_assistant and hasattr(ai_assistant, 'aipipe_token') else False
+    }
     
-    if not data or 'message' not in data:
-        return jsonify({
-            'success': False,
-            'error': 'Message is required'
-        }), 400
-    
-    user_message = data['message']
-    user_location = data.get('location')  # Optional {lat, lng}
-    
-    result = ai_assistant.chat(user_message, user_location)
-    
-    return jsonify(result)
+    return jsonify(status)
 
 @app.route('/api/ai/suggestions', methods=['GET'])
 def ai_suggestions():
