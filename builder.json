@@ -1,0 +1,16 @@
+{
+  "project": "uog_student_navigator",
+  "platform": "ios",
+  "github": {
+    "owner": "zufunega-hue",
+    "repo": "uog_navigetor"
+  },
+  "ios": {
+    "path": "frontend/ios"
+  },
+  "flutter": {
+    "watch": {}
+  },
+  "reactNative": {},
+  "mobai": {}
+}
