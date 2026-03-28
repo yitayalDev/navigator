@@ -2088,9 +2088,14 @@ def main():
     
     # Debug: Print environment variables
     import os
+    mongo_uri_env = os.getenv('MONGODB_URI') or os.getenv('MONGO_URI') or os.getenv('MONGODB_URL')
+    mongo_db_env = os.getenv('MONGODB_DB_NAME') or os.getenv('MONGO_DB') or os.getenv('MONGODB_DATABASE')
+    
     print(f"MONGODB_URI env: {os.getenv('MONGODB_URI')}")
     print(f"MONGO_URI env: {os.getenv('MONGO_URI')}")
-    print(f"MONGODB_DB_NAME env: {os.getenv('MONGODB_DB_NAME')}")
+    print(f"MONGODB_URL env: {os.getenv('MONGODB_URL')}")
+    print(f"Final MongoDB URI being used: {mongo_uri_env}")
+    print(f"Final MongoDB DB being used: {mongo_db_env}")
     print(f"Config MONGODB_URI: {config.MONGODB_URI}")
     print(f"Config MONGODB_DB_NAME: {config.MONGODB_DB_NAME}")
     
@@ -2146,9 +2151,11 @@ def main():
     # Check if we're running on a cloud platform
     is_production = os.getenv('RENDER') or os.getenv('PORT')
     
-    # Always use polling mode for now (more reliable on cloud platforms)
-    # TODO: Fix webhook dependencies for production deployment
-    print("Using polling mode (more reliable on cloud platforms)")
+    # FORCE POLLING MODE - webhook mode has dependency issues on Render
+    # Polling is more reliable on cloud platforms
+    print("==================================================")
+    print("FORCING POLLING MODE (more reliable on cloud)")
+    print("==================================================")
     
     # Start Flask in background thread for API
     import threading
