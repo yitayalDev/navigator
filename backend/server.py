@@ -2134,14 +2134,30 @@ def main():
     # For webhook mode, you need to set WEBHOOK_URL environment variable
     webhook_url = os.getenv('WEBHOOK_URL')
     
-    if webhook_url:
-        # Webhook mode
-        application.run_webhook(
-            listen='0.0.0.0',
-            port=int(os.getenv('PORT', 5000)),
-            url_path='webhook',
-            webhook_url=webhook_url
-        )
+    # On Render (or production), use webhook mode by default
+    # Check if we're running on a cloud platform
+    is_production = os.getenv('RENDER') or os.getenv('PORT')
+    
+    if webhook_url or is_production:
+        # Webhook mode (preferred for production like Render)
+        # Use webhook URL from env or construct one based on RENDERExternalURL
+        if not webhook_url:
+            render_url = os.getenv('RENDER_EXTERNAL_URL')
+            if render_url:
+                webhook_url = f"{render_url}/webhook"
+        
+        if webhook_url:
+            print(f"Using webhook mode: {webhook_url}")
+            application.run_webhook(
+                listen='0.0.0.0',
+                port=int(os.getenv('PORT', 5000)),
+                url_path='webhook',
+                webhook_url=webhook_url
+            )
+        else:
+            # Fallback to polling if no webhook URL available
+            print("No webhook URL available, using polling mode")
+            application.run_polling(drop_pending_updates=True)
     else:
         # Polling mode (for local development)
         # Start Flask in background thread
