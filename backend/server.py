@@ -2140,7 +2140,16 @@ def main():
     print("UOG Student Navigation Server")
     print("="*50)
     print("Bot handlers registered")
-    print(f"API available at: http://localhost:5000")
+    # Determine the correct URL based on environment
+    port = int(os.getenv('PORT', 5000))
+    render_url = os.getenv('RENDER_EXTERNAL_URL')
+    
+    if render_url:
+        api_url = render_url
+    else:
+        api_url = f"http://localhost:{port}"
+    
+    print(f"API available at: {api_url}")
     print("="*50 + "\n")
     
     # Run Flask app (with bot polling OR webhook)
