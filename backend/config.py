@@ -36,8 +36,8 @@ class Config:
     FLASK_SERVER_URL: Optional[str] = os.getenv('FLASK_SERVER_URL')
     
     # MongoDB Configuration
-    MONGODB_URI: Optional[str] = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/uog_navigator')
-    MONGODB_DB_NAME: Optional[str] = os.getenv('MONGODB_DB_NAME', 'uog_navigator')
+    MONGODB_URI: Optional[str] = os.getenv('MONGODB_URI', os.getenv('MONGO_URI', 'mongodb://localhost:27017/uog_navigator'))
+    MONGODB_DB_NAME: Optional[str] = os.getenv('MONGODB_DB_NAME', os.getenv('MONGO_DB', 'uog_navigator'))
     
     @classmethod
     def validate(cls) -> bool:
