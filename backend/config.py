@@ -38,10 +38,19 @@ class Config:
     # MongoDB Configuration
     # Check multiple environment variable names for compatibility
     _mongo_uri = os.getenv('MONGODB_URI') or os.getenv('MONGO_URI') or os.getenv('MONGODB_URL')
-    MONGODB_URI: Optional[str] = _mongo_uri if _mongo_uri else 'mongodb://localhost:27017/uog_navigator'
+    
+    # Only use localhost fallback in development, not production
+    is_production = os.getenv('RENDER') or os.getenv('PORT')
+    if not _mongo_uri and not is_production:
+        _mongo_uri = 'mongodb://localhost:27017/uog_navigator'
+    
+    MONGODB_URI: Optional[str] = _mongo_uri
     
     _mongo_db = os.getenv('MONGODB_DB_NAME') or os.getenv('MONGO_DB') or os.getenv('MONGODB_DATABASE')
-    MONGODB_DB_NAME: Optional[str] = _mongo_db if _mongo_db else 'uog_navigator'
+    if not _mongo_db and not is_production:
+        _mongo_db = 'uog_navigator'
+    
+    MONGODB_DB_NAME: Optional[str] = _mongo_db
     
     @classmethod
     def validate(cls) -> bool:
