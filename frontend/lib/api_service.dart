@@ -4,11 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// API Service for communicating with the backend server
 class ApiService {
-  // IMPORTANT: Update this to your computer's IP address for physical device testing
+  // For web browser (Edge/Chrome), use localhost
+  // For physical device testing on same network, use your computer's IP address
   // For Android Emulator: use 'http://10.0.2.2:5000'
-  // For Real Device on same WiFi: use 'http://YOUR_PC_IP:5000'
-  // For Web Browser: use 'http://localhost:5000'
-  static const String baseUrl = 'http://192.168.137.1:5000';
+  // Access from other devices on the network: use your computer's IP address
+  static String baseUrl = 'http://192.168.137.1:5000';
   
   /// Health check
   static Future<bool> healthCheck() async {
@@ -243,6 +243,27 @@ class ApiService {
     try {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getString('telegram_user_id');
+    } catch (e) {
+      return null;
+    }
+  }
+  
+  /// Get all registered users (for selecting friend to share location)
+  static Future<List<Map<String, String>>?> getUsers() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/api/users'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, String>>.from(
+            (data['users'] as List).map((u) => {
+              'username': u['username'] ?? '',
+              'name': u['name'] ?? 'Unknown',
+            })
+          );
+        }
+      }
+      return null;
     } catch (e) {
       return null;
     }

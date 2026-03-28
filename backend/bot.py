@@ -51,6 +51,8 @@ user_registry = {}
 pending_shares = {}
 
 
+from database import db
+
 def register_user(update: Update):
     """Register a user who started the bot."""
     user = update.effective_user
@@ -69,6 +71,17 @@ def register_user(update: Update):
             'username': username,
             'user_id': user.id
         }
+        
+        # Also save to MongoDB so the app can see this user
+        try:
+            db.add_user(
+                user_id=user.id,
+                username=username,
+                name=user.first_name,
+                chat_id=update.effective_chat.id
+            )
+        except Exception as e:
+            print(f"Error saving user to MongoDB: {e}")
 
 
 def get_user_chat_id(identifier):

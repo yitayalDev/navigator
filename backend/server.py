@@ -870,6 +870,32 @@ def get_all_campuses_api():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/users', methods=['GET'])
+def get_all_users_api():
+    """
+    Get all registered users (Telegram bot users) for location sharing.
+    Returns list of users with their usernames who have started the bot.
+    """
+    try:
+        # Ensure database is connected
+        db.connect()
+        users = db.get_all_users()
+        # Return only username and name (not chat_id or sensitive info)
+        user_list = []
+        for user in users:
+            user_list.append({
+                'username': user.get('username', ''),
+                'name': user.get('name', user.get('first_name', 'Unknown'))
+            })
+        return jsonify({
+            'success': True,
+            'users': user_list
+        })
+    except Exception as e:
+        logger.error(f"Error getting users: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/share-location', methods=['POST'])
 def share_location_to_friend():
     """

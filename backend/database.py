@@ -154,6 +154,11 @@ class Database:
     def get_all_users(self) -> List[Dict]:
         """Get all registered users."""
         try:
+            # Ensure connected
+            if not hasattr(self, '_db') or self._db is None:
+                self.connect()
+            if self._db is None:
+                return []
             return list(self._db.users.find({}))
         except Exception as e:
             logger.error(f"Error getting users: {e}")

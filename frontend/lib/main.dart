@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -8,6 +9,10 @@ import 'api_service.dart';
 import 'bluetooth_service.dart';
 import 'location_share_service.dart';
 import 'shortest_path_service.dart';
+import 'accessibility_manager.dart';
+import 'draggable_widget.dart';
+import 'gesture_service.dart';
+import 'walking_route_service.dart';
 import 'screens/ai_chat_screen.dart';
 
 // Bot username for location sharing
@@ -22,6 +27,9 @@ const String googleMapsApiKey = 'AIzaSyDxb9fKkpWmrupnMt0ijKGJi9pgILbLoPE';
 
 class UogNavigatorApp extends StatelessWidget {
   const UogNavigatorApp({super.key});
+
+  // Accessibility Manager instance
+  static final AccessibilityManager accessibilityManager = AccessibilityManager();
 
   @override
   Widget build(BuildContext context) {
@@ -508,6 +516,10 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initializeApp() async {
+    // Initialize accessibility services
+    await UogNavigatorApp.accessibilityManager.initialize();
+    debugPrint('Accessibility services initialized');
+    
     // Load locations from API
     await loadLocationsFromApi();
     
@@ -931,6 +943,7 @@ class _CampusListPageState extends State<CampusListPage> {
     _pendingFriendUsername = null;
   }
 
+  // Get current location for campus list
   Future<void> _getCurrentLocation() async {
     setState(() {
       _isLoadingLocation = true;
@@ -949,6 +962,85 @@ class _CampusListPageState extends State<CampusListPage> {
         _locationError = 'Could not get location';
       }
     });
+  }
+
+  // Show accessibility settings dialog
+  void _showAccessibilityDialog(BuildContext context) {
+    final accessibilityManager = UogNavigatorApp.accessibilityManager;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.accessibility_new, color: Color(0xFF1E88E5)),
+            SizedBox(width: 8),
+            Text('Accessibility Settings'),
+          ],
+        ),
+        content: StatefulBuilder(
+          builder: (context, setState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Blind Mode Toggle
+              SwitchListTile(
+                title: const Text('Blind Mode'),
+                subtitle: const Text('Enable voice guidance and gestures'),
+                value: accessibilityManager.isBlindMode,
+                onChanged: (value) {
+                  setState(() {
+                    if (value) {
+                      accessibilityManager.enableBlindMode();
+                      accessibilityManager.voiceService.speak('Blind mode enabled');
+                    } else {
+                      accessibilityManager.disableBlindMode();
+                    }
+                  });
+                },
+              ),
+              const Divider(),
+              // Gesture Info
+              const ListTile(
+                leading: Icon(Icons.touch_app),
+                title: Text('Gestures'),
+                subtitle: Text(
+                  '• Double click: Voice command\n'
+                  '• Triple click: Emergency\n'
+                  '• Swipe up: Next instruction\n'
+                  '• Swipe down: Pause navigation',
+                ),
+              ),
+              const Divider(),
+              // Detect Blind User Button
+              ElevatedButton.icon(
+                onPressed: () {
+                  accessibilityManager.detectBlindUser();
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Analyzing... Please look at the camera'),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Detect Blind User'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E88E5),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
   
   // Update server with current location (so bot can get it when needed)
@@ -969,44 +1061,105 @@ class _CampusListPageState extends State<CampusListPage> {
 
   /// Share current GPS location to a friend
   void _shareCurrentLocation() async {
-    // Show dialog to get friend's username
-    final friendUsernameController = TextEditingController();
+    // Show dialog to select friend from list
+    final selectedUserController = TextEditingController();
+    List<Map<String, String>> users = [];
+    bool isLoading = true;
+    
+    // Load users from API
+    final loadedUsers = await ApiService.getUsers();
+    if (loadedUsers != null && loadedUsers.isNotEmpty) {
+      users = loadedUsers;
+    }
+    isLoading = false;
     
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Share My Location'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Share your current GPS location with a friend via Telegram.',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: friendUsernameController,
-              decoration: const InputDecoration(
-                labelText: "Friend's Telegram Username",
-                hintText: 'Enter username (without @)',
-                prefixIcon: Icon(Icons.person),
-                border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Share My Location'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Share your current GPS location with a friend via Telegram.',
+                style: TextStyle(color: Colors.grey[600]),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+              const SizedBox(height: 16),
+              if (isLoading)
+                const Center(child: CircularProgressIndicator())
+              else if (users.isEmpty)
+                const Text(
+                  'No friends found.\nAsk your friends to start the Telegram bot first!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.orange),
+                )
+              else ...[
+                const Text(
+                  'Select a friend:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    underline: const SizedBox(),
+                    hint: const Text('Choose a friend'),
+                    value: selectedUserController.text.isEmpty ? null : selectedUserController.text,
+                    items: users.map((user) {
+                      return DropdownMenuItem<String>(
+                        value: user['username'],
+                        child: Row(
+                          children: [
+                            const Icon(Icons.person, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '@${user['username']}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  if (user['name'] != null && user['name']!.isNotEmpty)
+                                    Text(
+                                      user['name']!,
+                                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedUserController.text = value ?? '';
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
           ElevatedButton(
             onPressed: () async {
-              final friendUsername = friendUsernameController.text.trim();
+              final friendUsername = selectedUserController.text.trim();
               if (friendUsername.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Please enter a username'),
+                    content: Text('Please select a friend'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -1074,6 +1227,7 @@ class _CampusListPageState extends State<CampusListPage> {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -1089,29 +1243,6 @@ class _CampusListPageState extends State<CampusListPage> {
             backgroundColor: const Color(0xFF1E88E5),
             foregroundColor: Colors.white,
             actions: [
-              // Open Telegram button
-              IconButton(
-                icon: const Icon(Icons.send),
-                onPressed: () async {
-                  final telegramUrl = 'https://t.me/UOGStudentNavBot';
-                  if (await canLaunchUrl(Uri.parse(telegramUrl))) {
-                    await launchUrl(
-                      Uri.parse(telegramUrl),
-                      mode: LaunchMode.externalApplication,
-                    );
-                  } else {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Could not open Telegram'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
-                tooltip: 'Open Telegram bot',
-              ),
               // Location button in app bar
               IconButton(
                 icon: _isLoadingLocation
@@ -1126,6 +1257,12 @@ class _CampusListPageState extends State<CampusListPage> {
                     : const Icon(Icons.my_location),
                 onPressed: _isLoadingLocation ? null : _getCurrentLocation,
                 tooltip: 'Get my location',
+              ),
+              // Accessibility settings button
+              IconButton(
+                icon: const Icon(Icons.accessibility_new),
+                onPressed: () => _showAccessibilityDialog(context),
+                tooltip: 'Accessibility Settings',
               ),
 
             ],
@@ -1258,30 +1395,29 @@ class _CampusListPageState extends State<CampusListPage> {
                 : const Icon(Icons.my_location, color: Color(0xFF1E88E5)),
           ),
           const SizedBox(height: 8),
-          // AI Campus Assistant FAB
-          FloatingActionButton.extended(
-            heroTag: 'ai_chat',
+          // Share My Location FAB
+          FloatingActionButton.small(
+            heroTag: 'share_location',
+            onPressed: _shareCurrentLocation,
+            backgroundColor: const Color(0xFF0088CC),
+            tooltip: 'Share My Location',
+            child: const Icon(Icons.share_location, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          // AI Campus Assistant FAB (Draggable)
+          DraggableFAB(
+            icon: Icons.smart_toy_outlined,
+            label: 'AI Assistant',
+            backgroundColor: const Color(0xFF6750A4),
+            foregroundColor: Colors.white,
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AIChatScreen()),
               );
             },
-            icon: const Icon(Icons.smart_toy_outlined),
-            label: const Text('AI Assistant'),
-            backgroundColor: const Color(0xFF6750A4),
-          ),
-          const SizedBox(height: 8),
-          // Telegram Bot FAB
-          FloatingActionButton.extended(
-            heroTag: 'telegram',
-            onPressed: () {
-              final uri = Uri.parse('https://t.me/$botUsername');
-              launchUrl(uri, mode: LaunchMode.externalApplication);
-            },
-            icon: const Icon(Icons.send),
-            label: const Text('Telegram Bot'),
-            backgroundColor: const Color(0xFF0088CC),
+            initialX: 20,
+            initialY: 120,
           ),
         ],
       ),
@@ -2282,7 +2418,7 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
 
   /// Share location to friend via Telegram
   void _shareLocationToFriend(Location location) async {
-    // Show a dialog to get friend's username
+    // Show a dialog to enter friend's username manually
     final friendUsernameController = TextEditingController();
     
     showDialog(
@@ -2291,20 +2427,35 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
         title: const Text('Share Location via Telegram'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Share "${location.name}" location with a friend via Telegram bot.',
+              'Enter the username of your friend to send the location.',
               style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: friendUsernameController,
-              decoration: const InputDecoration(
-                labelText: "Friend's Telegram Username",
-                hintText: 'Enter username (without @)',
-                prefixIcon: Icon(Icons.person),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: 'Friend\'s Username',
+                hintText: 'Enter username (e.g., john_doe)',
+                prefixText: '@',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                prefixIcon: const Icon(Icons.person),
               ),
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (value) {
+                // Trigger share when user presses enter
+                _sendLocationToFriend(context, location, friendUsernameController.text.trim());
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your friend must have started the Telegram bot to receive the location.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
             ),
           ],
         ),
@@ -2313,84 +2464,100 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              final friendUsername = friendUsernameController.text.trim();
-              if (friendUsername.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a username'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-              
-              Navigator.pop(context);
-              
-              // Show loading with instant sharing message
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('📍 Getting GPS and sharing instantly...'),
-                  backgroundColor: Colors.blue,
-                  duration: Duration(seconds: 10),
-                ),
-              );
-              
-              // Get current GPS location instantly
-              Position? position = _userPosition;
-              if (position == null) {
-                position = await LocationShareService.getCurrentLocation();
-              }
-              
-              // Use the specific location OR current GPS location
-              String coords;
-              String locationName;
-              
-              if (position != null) {
-                // Use current GPS location
-                coords = '${position.latitude},${position.longitude}';
-                locationName = 'My Current Location';
-              } else {
-                // Fallback to selected location
-                coords = '${location.lat},${location.lng}';
-                locationName = location.name;
-              }
-              
-              // Share the location immediately
-              final result = await ApiService.shareLocationToFriend(
-                senderId: 'app_user',
-                friendUsername: friendUsername,
-                coords: coords,
-                locationName: locationName,
-                senderName: 'UOG Navigator User',
-              );
-              
-              if (result != null && result['success'] == true) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('✅ Location sent to @$friendUsername!\n📍 $coords'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('❌ Failed: ${result?['error'] ?? 'Unknown error'}'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
+          ElevatedButton.icon(
+            onPressed: () {
+              _sendLocationToFriend(context, location, friendUsernameController.text.trim());
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0088CC),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Share My GPS Location'),
+            icon: const Icon(Icons.send),
+            label: const Text('Share'),
           ),
         ],
       ),
     );
+  }
+
+  /// Send location to friend
+  void _sendLocationToFriend(BuildContext dialogContext, Location location, String friendUsername) async {
+    if (friendUsername.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a friend\'s username'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    // Remove @ symbol if user included it
+    final cleanUsername = friendUsername.startsWith('@') 
+        ? friendUsername.substring(1) 
+        : friendUsername;
+    
+    Navigator.pop(dialogContext); // Close the dialog
+    
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    
+    try {
+      // Get current user location
+      final position = await LocationShareService.getCurrentLocation();
+      
+      if (position == null) {
+        if (context.mounted) {
+          Navigator.pop(context); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not get your current location'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Share location to friend via API
+      final result = await ApiService.shareLocationToFriend(
+        senderId: 'app_user',
+        friendUsername: cleanUsername,
+        coords: '${position.latitude},${position.longitude}',
+        locationName: location.name,
+        senderName: 'UOG Navigator User',
+      );
+      
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading
+        
+        if (result != null && result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Location sent to @${cleanUsername}!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed: ${result?['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   /// Calculate and show shortest route on map
@@ -2415,7 +2582,7 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
         .map((loc) => {'lat': loc.lat, 'lng': loc.lng})
         .toList();
 
-    // Calculate shortest path using Dijkstra's algorithm
+    // First try our shortest path algorithm with campus waypoints
     final path = ShortestPathAlgorithm.findShortestPath(
       _userPosition!.latitude,
       _userPosition!.longitude,
@@ -2424,8 +2591,38 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
       waypoints,
     );
 
+    // Calculate distance using our algorithm
+    double ourDistance = 0;
+    for (int i = 1; i < path.length; i++) {
+      ourDistance += ShortestPathAlgorithm.calculateDistance(
+        path[i - 1]['lat']!,
+        path[i - 1]['lng']!,
+        path[i]['lat']!,
+        path[i]['lng']!,
+      );
+    }
+
+    // Also try Google Maps walking directions
+    final walkingRoute = await WalkingRouteService().getBestWalkingRoute(
+      startLat: _userPosition!.latitude,
+      startLng: _userPosition!.longitude,
+      endLat: destination.lat,
+      endLng: destination.lng,
+      campusWaypoints: waypoints,
+    );
+
+    // Use the shorter route
+    List<Map<String, double>> finalPath;
+    if (walkingRoute.isValid && walkingRoute.totalDistanceMeters < ourDistance) {
+      debugPrint('Using Google Maps walking route (shorter)');
+      finalPath = walkingRoute.path;
+    } else {
+      debugPrint('Using our shortest path algorithm');
+      finalPath = path;
+    }
+
     // Convert to LatLng points
-    final routePoints = path
+    final routePoints = finalPath
         .map((p) => LatLng(p['lat']!, p['lng']!))
         .toList();
 
@@ -2461,7 +2658,7 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '📍 Shortest Route Found!\n'
+          '🚶 Walking Route Found!\n'
           'Distance: ${ShortestPathAlgorithm.formatDistance(totalDistance)}\n'
           'Walking time: ~$estimatedTime minutes',
         ),
