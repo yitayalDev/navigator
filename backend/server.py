@@ -2086,6 +2086,14 @@ def main():
     print("Connecting to MongoDB...")
     print("="*50)
     
+    # Debug: Print environment variables
+    import os
+    print(f"MONGODB_URI env: {os.getenv('MONGODB_URI')}")
+    print(f"MONGO_URI env: {os.getenv('MONGO_URI')}")
+    print(f"MONGODB_DB_NAME env: {os.getenv('MONGODB_DB_NAME')}")
+    print(f"Config MONGODB_URI: {config.MONGODB_URI}")
+    print(f"Config MONGODB_DB_NAME: {config.MONGODB_DB_NAME}")
+    
     if not db.connect():
         print("\n" + "="*50)
         print("WARNING: Could not connect to MongoDB!")
@@ -2138,36 +2146,18 @@ def main():
     # Check if we're running on a cloud platform
     is_production = os.getenv('RENDER') or os.getenv('PORT')
     
-    if webhook_url or is_production:
-        # Webhook mode (preferred for production like Render)
-        # Use webhook URL from env or construct one based on RENDERExternalURL
-        if not webhook_url:
-            render_url = os.getenv('RENDER_EXTERNAL_URL')
-            if render_url:
-                webhook_url = f"{render_url}/webhook"
-        
-        if webhook_url:
-            print(f"Using webhook mode: {webhook_url}")
-            application.run_webhook(
-                listen='0.0.0.0',
-                port=int(os.getenv('PORT', 5000)),
-                url_path='webhook',
-                webhook_url=webhook_url
-            )
-        else:
-            # Fallback to polling if no webhook URL available
-            print("No webhook URL available, using polling mode")
-            application.run_polling(drop_pending_updates=True)
-    else:
-        # Polling mode (for local development)
-        # Start Flask in background thread
-        import threading
-        flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, threaded=True))
-        flask_thread.daemon = True
-        flask_thread.start()
-        
-        # Run bot with polling - drop pending updates to avoid conflicts
-        application.run_polling(drop_pending_updates=True)
+    # Always use polling mode for now (more reliable on cloud platforms)
+    # TODO: Fix webhook dependencies for production deployment
+    print("Using polling mode (more reliable on cloud platforms)")
+    
+    # Start Flask in background thread for API
+    import threading
+    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, threaded=True))
+    flask_thread.daemon = True
+    flask_thread.start()
+    
+    # Run bot with polling - drop pending updates to avoid conflicts
+    application.run_polling(drop_pending_updates=True)
 
 
 # ============================================================================

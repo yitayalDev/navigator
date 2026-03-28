@@ -60,6 +60,24 @@ class Database:
         Returns True if connection successful, False otherwise.
         """
         try:
+            # Debug: Print the MongoDB URI being used (masking password)
+            mongo_uri = config.MONGODB_URI
+            if mongo_uri and '@' in mongo_uri:
+                # Mask password in URI
+                parts = mongo_uri.split('@')
+                credentials = parts[0].split('://')
+                if len(credentials) > 1:
+                    user_pass = credentials[1].split(':')
+                    if len(user_pass) > 1:
+                        masked = f"{credentials[0]}://{user_pass[0]}:****@{parts[1]}"
+                    else:
+                        masked = mongo_uri
+                else:
+                    masked = mongo_uri
+            else:
+                masked = mongo_uri
+            logger.info(f"Connecting to MongoDB: {masked}")
+            
             # Connect to MongoDB
             self._client = MongoClient(
                 config.MONGODB_URI,
