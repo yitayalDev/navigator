@@ -7,8 +7,8 @@ class ApiService {
   // For web browser (Edge/Chrome), use localhost
   // For physical device testing on same network, use your computer's IP address
   // For Android Emulator: use 'http://10.0.2.2:5000'
-  // Access from other devices on the network: use your computer's IP address
-  static String baseUrl = 'http://192.168.137.1:5000';
+  // Deployed backend on Render
+  static String baseUrl = 'https://navigator-backend-ku90.onrender.com';
   
   /// Health check
   static Future<bool> healthCheck() async {
