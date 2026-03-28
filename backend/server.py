@@ -2152,27 +2152,38 @@ def main():
     print(f"API available at: {api_url}")
     print("="*50 + "\n")
     
-    # Run Flask app (with bot polling OR webhook)
-    # For webhook mode, you need to set WEBHOOK_URL environment variable
-    webhook_url = os.getenv('WEBHOOK_URL')
-    
-    # On Render (or production), use webhook mode by default
-    # Check if we're running on a cloud platform
+    # Check environment
     is_production = os.getenv('RENDER') or os.getenv('PORT')
     
-    # FORCE POLLING MODE - webhook mode has dependency issues on Render
-    # Polling is more reliable on cloud platforms
-    print("==================================================")
-    print("FORCING POLLING MODE (more reliable on cloud)")
-    print("==================================================")
+    # Check for webhook URL
+    webhook_url = os.getenv('WEBHOOK_URL')
     
-    # Start Flask in background thread for API
+    # Print mode being used
+    print("=" * 50)
+    if is_production:
+        print("PRODUCTION MODE DETECTED - Using polling mode")
+    else:
+        print("DEVELOPMENT MODE - Using polling mode")
+    print("=" * 50 + "\n")
+    
+    # Start Flask API server in background thread
     import threading
-    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, threaded=True))
+    port = int(os.getenv('PORT', 5000))
+    flask_thread = threading.Thread(
+        target=lambda: app.run(
+            host='0.0.0.0',
+            port=port,
+            debug=False,
+            threaded=True
+        )
+    )
     flask_thread.daemon = True
     flask_thread.start()
     
-    # Run bot with polling - drop pending updates to avoid conflicts
+    print(f"Flask API started on port {port}")
+    
+    # Use polling mode (not webhook - more reliable on cloud)
+    print("Starting Telegram bot in polling mode...")
     application.run_polling(drop_pending_updates=True)
 
 
