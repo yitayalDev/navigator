@@ -1243,6 +1243,12 @@ class _CampusListPageState extends State<CampusListPage> {
             backgroundColor: const Color(0xFF1E88E5),
             foregroundColor: Colors.white,
             actions: [
+              // Share location button in app bar
+              IconButton(
+                icon: const Icon(Icons.share_location),
+                onPressed: _shareCurrentLocation,
+                tooltip: 'Share my location to friend',
+              ),
               // Location button in app bar
               IconButton(
                 icon: _isLoadingLocation
@@ -2697,6 +2703,117 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  /// Share current location to a friend via Telegram
+  Future<void> _shareCurrentLocation() async {
+    if (_userPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please get your location first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Show dialog to enter friend's username
+    final friendController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Share My Location'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Share your current location with a friend via Telegram.',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: friendController,
+              decoration: const InputDecoration(
+                labelText: "Friend's username",
+                hintText: 'Enter username (without @)',
+                prefixText: '@',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final friendUsername = friendController.text.trim();
+              if (friendUsername.isEmpty) {
+                return;
+              }
+              
+              Navigator.pop(dialogContext);
+              
+              // Show loading
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(child: CircularProgressIndicator()),
+              );
+              
+              try {
+                final coords = '${_userPosition!.latitude},${_userPosition!.longitude}';
+                final result = await ApiService.shareLocationToFriend(
+                  senderId: 'app_user',
+                  friendUsername: friendUsername,
+                  coords: coords,
+                  locationName: 'My Current Location',
+                  senderName: 'UOG Navigator User',
+                );
+                
+                if (mounted) {
+                  Navigator.pop(context); // Close loading
+                  
+                  if (result != null && result['success'] == true) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('✅ Location sent to @$friendUsername!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Failed: ${result?['error'] ?? 'Unknown error'}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.pop(context); // Close loading
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0088CC),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Share'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Method to get user's real current location - this is the "Get Location" button functionality
   Future<void> _getUserLocation() async {
     setState(() {
@@ -2890,6 +3007,12 @@ class _CampusMapScreenState extends State<CampusMapScreen> {
         backgroundColor: widget.campus.color,
         foregroundColor: Colors.white,
         actions: [
+          // Share My Location button in app bar
+          IconButton(
+            icon: const Icon(Icons.share_location),
+            onPressed: _shareCurrentLocation,
+            tooltip: 'Share my location to friend',
+          ),
           // Get My Location button in app bar
           IconButton(
             icon: _isGettingLocation
