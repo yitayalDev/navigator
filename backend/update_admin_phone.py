@@ -1,11 +1,20 @@
 """Update admin user with phone number in MongoDB Atlas"""
+import os
 import sys
 sys.path.insert(0, '.')
 
-from pymongo import MongoClient
 
-# Use the cloud MongoDB Atlas connection
-mongo_uri = "mongodb+srv://paypal831363_db_user:uRPdFYdubkXo4cNv@cluster0.upsy9z8.mongodb.net/uog_navigator?retryWrites=true&w=majority"
+from pymongo import MongoClient
+from dotenv import load_dotenv
+
+# Load from .env (not committed to Git)
+load_dotenv()
+mongo_uri = os.getenv('MONGODB_URI')
+
+if not mongo_uri:
+    print("ERROR: MONGODB_URI not found in .env file!")
+    sys.exit(1)
+
 client = MongoClient(mongo_uri)
 db = client['uog_navigator']
 
