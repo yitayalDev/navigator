@@ -81,15 +81,18 @@ class Database:
                 masked = mongo_uri
             logger.info(f"Connecting to MongoDB: {masked}")
             
-            # Connect to MongoDB
+            # Connect to MongoDB with TLS support
             self._client = MongoClient(
                 config.MONGODB_URI,
-                serverSelectionTimeoutMS=5000,  # 5 second timeout
-                connectTimeoutMS=5000
+                serverSelectionTimeoutMS=10000,  # 10 second timeout
+                connectTimeoutMS=10000,
+                tls=True,
+                tlsAllowInvalidCertificates=False
             )
             
-            # Get database
-            self._db = self._client[config.MONGODB_DB_NAME]
+            # Get database - ensure DB name is valid
+            db_name = config.MONGODB_DB_NAME or 'uog_navigator'
+            self._db = self._client[db_name]
             
             # Test connection
             self._client.server_info()

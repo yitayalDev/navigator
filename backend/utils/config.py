@@ -46,26 +46,31 @@ class Config:
     
     MONGODB_URI: Optional[str] = _mongo_uri
     
+    # Get DB name from env var OR extract from URI
     _mongo_db = os.getenv('MONGODB_DB_NAME') or os.getenv('MONGO_DB') or os.getenv('MONGODB_DATABASE')
-    if not _mongo_db and not is_production:
-        _mongo_db = 'uog_navigator'
+    if not _mongo_db:
+        # Try to extract database name from URI
+        if _mongo_uri and '/' in _mongo_uri:
+            # Format: mongodb+srv://user:pass@host/dbname?params
+            _mongo_db = _mongo_uri.split('/')[-1].split('?')[0] or 'uog_navigator'
+        elif not is_production:
+            _mongo_db = 'uog_navigator'
+        else:
+            _mongo_db = 'uog_navigator'  # Default for production
     
     MONGODB_DB_NAME: Optional[str] = _mongo_db
     
     @classmethod
     def validate(cls) -> bool:
         """Validate required configuration."""
+        # Telegram bot is optional now - just warn, don't fail
         if not cls.TELEGRAM_BOT_TOKEN:
-            print("ERROR: TELEGRAM_BOT_TOKEN not found in environment variables!")
-            print("Please set it in the .env file or as an environment variable.")
-            return False
+            print("WARNING: TELEGRAM_BOT_TOKEN not set - Telegram bot will be disabled")
         return True
     
     @classmethod
-    def get_bot_token(cls) -> str:
-        """Get bot token with validation."""
-        if not cls.TELEGRAM_BOT_TOKEN:
-            raise ValueError("TELEGRAM_BOT_TOKEN is not configured!")
+    def get_bot_token(cls) -> Optional[str]:
+        """Get bot token (may be None if not configured)."""
         return cls.TELEGRAM_BOT_TOKEN
 
 
