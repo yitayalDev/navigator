@@ -13,6 +13,7 @@ class VoiceService {
   // Text-to-Speech
   late FlutterTts _flutterTts;
   bool _isTtsInitialized = false;
+  bool _isSpeaking = false; // Track speaking state
   double _speechRate = 0.4; // Slower for Ethiopian English listeners
   double _volume = 1.0;
   double _pitch = 1.0;
@@ -46,7 +47,14 @@ class VoiceService {
     
     // Handle TTS completion
     _flutterTts.setCompletionHandler(() {
+      _isSpeaking = false;
       debugPrint('TTS completed');
+    });
+    
+    // Handle TTS start
+    _flutterTts.setStartHandler(() {
+      _isSpeaking = true;
+      debugPrint('TTS started');
     });
     
     _flutterTts.setErrorHandler((msg) {
@@ -321,8 +329,5 @@ class VoiceService {
   }
 
   /// Check if TTS is currently speaking
-  Future<bool> get isSpeaking async {
-    // Use state check instead
-    return false;
-  }
+  bool get isSpeaking => _isSpeaking;
 }

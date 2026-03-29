@@ -339,9 +339,9 @@ class AccessibilityManager {
       final navState = navigationService.state;
       switch (navState) {
         case NavigationState.navigating:
-          final distance = navigationService.getRemainingDistance();
-          final time = navigationService.getEstimatedTime();
-          voiceService.speak('Navigating. $distance meters remaining. Estimated time: $time minutes.');
+          final distance = navigationService.totalDistanceRemaining;
+          final time = (distance / 80).ceil(); // rough estimate: 80m per minute
+          voiceService.speak('Navigating. ${distance.toStringAsFixed(0)} meters remaining. Estimated time: $time minutes.');
           break;
         case NavigationState.paused:
           voiceService.speak('Navigation paused.');

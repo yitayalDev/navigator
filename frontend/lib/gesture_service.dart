@@ -43,8 +43,14 @@ class GestureService {
     required Widget child,
     Function(GestureCommand)? onGesture,
   }) {
+    // Store the callback but also allow it to be provided
     if (onGesture != null) {
-      onGestureDetected = onGesture;
+      final existingCallback = onGestureDetected;
+      onGestureDetected = (command) {
+        // Call both existing and new callback
+        existingCallback?.call(command);
+        onGesture?.call(command);
+      };
     }
 
     return GestureDetector(

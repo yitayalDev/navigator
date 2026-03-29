@@ -157,9 +157,13 @@ class PedestrianNavigationService {
       }
 
       // Get initial position
-      _currentPosition = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      try {
+        _currentPosition = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+      } catch (e) {
+        debugPrint('Error getting current position: $e');
+      }
       
       debugPrint('Navigation service initialized at: $_currentPosition');
       return true;
@@ -365,7 +369,10 @@ class PedestrianNavigationService {
         _previousPosition = _currentPosition;
         _currentPosition = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
-        );
+        ).catchError((e) {
+          debugPrint('Error updating position: $e');
+          return _currentPosition;
+        });
         
         onPositionUpdated?.call(_currentPosition!);
         _checkProgress();

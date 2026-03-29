@@ -3,7 +3,8 @@ import 'package:geolocator/geolocator.dart';
 import 'voice_service.dart';
 import 'pedestrian_navigation_service.dart';
 import 'walking_route_service.dart';
-import 'main.dart'; // For Location and allLocations
+import 'models/models.dart';
+import 'services/data_service.dart';
 
 /// Blind Mode State
 enum BlindModeState {
@@ -47,6 +48,11 @@ class BlindModeController {
   Future<void> initialize() async {
     await voiceService.initialize();
     await navigationService.initialize();
+
+    // Set up voice service callback to process speech results
+    voiceService.onSpeechResult = handleSpeechResult;
+    voiceService.onListeningStarted = _handleListeningStarted;
+    voiceService.onListeningStopped = _handleListeningStopped;
 
     // Set up navigation callbacks
     navigationService.onInstructionChanged = _handleNavigationInstruction;
@@ -151,7 +157,7 @@ class BlindModeController {
     // Search through allLocations for matching name
     final normalizedName = name.toLowerCase().trim();
     
-    for (final location in allLocations) {
+    for (final location in DataService.allLocations) {
       final locName = location.name.toLowerCase().trim();
       // Exact match
       if (locName == normalizedName) {
@@ -247,14 +253,29 @@ class BlindModeController {
       final isOffRoute = walkingRouteService.isOffRoute(
         position.latitude,
         position.longitude,
-        navigationService.state == NavigationState.navigating 
-            ? [] 
-            : [],
+        [],
       );
 
       if (isOffRoute) {
         voiceService.announceWrongDirection('turn around');
       }
+    }
+  }
+
+  void _handleListeningStarted() {
+    debugPrint('Listening started for destination');
+  }
+
+  void _handleListeningStopped() {
+    debugPrint('Listening stopped');
+    // If we're waiting for destination and no result was received, ask again
+    if (_state == BlindModeState.listeningForDestination) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (_state == BlindModeState.listeningForDestination) {
+          voiceService.speak('I did not hear a location. Please try again.');
+          startListeningForDestination();
+        }
+      });
     }
   }
 

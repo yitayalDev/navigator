@@ -1,16 +1,13 @@
-# Telegram Bot Dependencies
-python-telegram-bot==20.8
-
 # Environment Variables
 python-dotenv==1.0.0
 
-# HTTP Requests (for SDMR routing service and AI API)
+# HTTP Requests (for routing service and AI API)
 requests==2.31.0
 
 # AI Integration (AIPIPE/OpenAI compatible)
 openai>=1.0.0
 
-# HTTP Server (optional - for webhook mode)
+# HTTP Server
 flask==3.0.0
 flask-cors
 flask-login
@@ -19,3 +16,6 @@ flask-bcrypt
 # MongoDB Database
 pymongo==4.6.1
 dnspython==2.4.2
+
+# SMS Service (Twilio)
+twilio>=8.0.0

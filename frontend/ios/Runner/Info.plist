@@ -66,5 +66,20 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access for voice commands and navigation instructions for blind users.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app uses the camera to detect if the user is blind and automatically enable accessibility features.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs your location to provide navigation guidance and find nearby campus locations.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs continuous location access to provide real-time navigation instructions for blind users.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>This app needs access to play navigation audio.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>location</string>
+	</array>
 </dict>
 </plist>

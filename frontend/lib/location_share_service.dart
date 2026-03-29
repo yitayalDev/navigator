@@ -1,6 +1,6 @@
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
-import 'api_service.dart';
+import 'services/api_service.dart';
 
 /// Location sharing service for sharing user location via Telegram or other apps
 class LocationShareService {

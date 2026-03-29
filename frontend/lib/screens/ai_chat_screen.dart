@@ -110,12 +110,20 @@ What would you like to know?""",
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
-          children: [
-            Icon(Icons.smart_toy_outlined),
-            SizedBox(width: 8),
-            Text('Campus Assistant'),
-          ],
+        title: Flexible(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.smart_toy_outlined, size: 20),
+              const SizedBox(width: 4),
+              const Flexible(
+                child: Text(
+                  'Campus Assistant',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,

@@ -4,7 +4,7 @@ Handles all database operations for users, locations, and sharing.
 """
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from bson import ObjectId
 import logging
@@ -258,6 +258,18 @@ class Database:
             return True
         except Exception as e:
             logger.error(f"Error marking share delivered: {e}")
+            return False
+    
+    def mark_share_read(self, share_id: str) -> bool:
+        """Mark a share as read."""
+        try:
+            self._db.shares.update_one(
+                {'_id': self._get_object_id(share_id)},
+                {'$set': {'status': 'read', 'read_at': datetime.utcnow()}}
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error marking share read: {e}")
             return False
     
     def get_share_history(self, user_id: int = None, username: str = None, 
@@ -637,6 +649,86 @@ class Database:
         except Exception as e:
             logger.error(f"Error initializing default admin: {e}")
             return False
+    
+    def update_admin_password(self, username: str, new_password: str) -> bool:
+        """Update admin user password."""
+        try:
+            from flask_bcrypt import Bcrypt
+            bcrypt = Bcrypt()
+            hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+            
+            result = self._db.admin_users.update_one(
+                {'username': username},
+                {'$set': {'password': hashed_password}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(f"Error updating admin password: {e}")
+            return False
+    
+    def create_sms_verification(self, username: str, phone: str, code: str) -> bool:
+        """Create or update SMS verification code for admin user."""
+        try:
+            # Delete any existing codes for this username
+            self._db.sms_verifications.delete_many({'username': username})
+            
+            # Create new verification record
+            verification = {
+                'username': username,
+                'phone': phone,
+                'code': code,
+                'attempts': 0,
+                'created_at': datetime.utcnow(),
+                'expires_at': datetime.utcnow() + timedelta(minutes=10)
+            }
+            
+            self._db.sms_verifications.insert_one(verification)
+            logger.info(f"Created SMS verification for {username}")
+            return True
+        except Exception as e:
+            logger.error(f"Error creating SMS verification: {e}")
+            return False
+    
+    def verify_sms_code(self, username: str, code: str) -> bool:
+        """Verify SMS code for admin user."""
+        try:
+            verification = self._db.sms_verifications.find_one({
+                'username': username,
+                'code': code
+            })
+            
+            if not verification:
+                return False
+            
+            # Check if expired
+            if datetime.utcnow() > verification['expires_at']:
+                self._db.sms_verifications.delete_one({'username': username})
+                return False
+            
+            # Check attempts
+            if verification['attempts'] >= 3:
+                self._db.sms_verifications.delete_one({'username': username})
+                return False
+            
+            # Delete the code after successful verification
+            self._db.sms_verifications.delete_one({'username': username})
+            return True
+        except Exception as e:
+            logger.error(f"Error verifying SMS code: {e}")
+            return False
+    
+    def increment_sms_attempts(self, username: str) -> int:
+        """Increment failed attempt counter for SMS verification."""
+        try:
+            result = self._db.sms_verifications.update_one(
+                {'username': username},
+                {'$inc': {'attempts': 1}}
+            )
+            verification = self._db.sms_verifications.find_one({'username': username})
+            return verification['attempts'] if verification else 0
+        except Exception as e:
+            logger.error(f"Error incrementing SMS attempts: {e}")
+            return 0
     
     # =========================================================================
     # HELPER METHODS
