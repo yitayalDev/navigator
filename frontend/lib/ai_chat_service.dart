@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 class AIChatService {
   // Use port 5000 for full server (with AI), 5001 for standalone AI server
   // Update IP to your computer's IP for physical device
-  static const String baseUrl = 'https://navigator-backend-xncz.onrender.com';
+  static const String baseUrl = 'https://navigator-b1wp.onrender.com';
   
   /// Send a message to the AI assistant
   static Future<AIChatResponse?> sendMessage(String message, {String? userId}) async {

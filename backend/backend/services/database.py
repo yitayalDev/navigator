@@ -311,6 +311,18 @@ class Database:
             logger.error(f"Error getting locations: {e}")
             return []
     
+    def get_all_locations(self) -> List[Dict]:
+        """Get all locations (alias for get_campus_locations)."""
+        return self.get_campus_locations()
+    
+    def get_locations_count(self) -> int:
+        """Get total number of locations."""
+        try:
+            return self._db.campus_locations.count_documents({})
+        except Exception as e:
+            logger.error(f"Error getting locations count: {e}")
+            return 0
+    
     def add_campus_location(self, location_data: Dict) -> bool:
         """Add a new campus location."""
         try:

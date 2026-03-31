@@ -9,7 +9,7 @@ class ApiService {
   // For Android Emulator: use 'http://10.0.2.2:5000'
   // Local backend running on port 5000
   // Use physical device IP when testing on real device
-  static String baseUrl = 'https://navigator-backend-xncz.onrender.com';
+  static String baseUrl = 'https://navigator-b1wp.onrender.com';
   
   /// Health check
   static Future<bool> healthCheck() async {

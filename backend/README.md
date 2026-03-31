@@ -1,24 +1,10 @@
-# Backend Telegram Bot (uog navigetor)
+# uog navigetor
 
-This is a minimal Telegram-bot scaffold to expose campus locations and integrate with the app.
+Workspace scaffold for the `uog navigetor` project.
 
-Setup (Windows PowerShell):
+- Frontend: Flutter app (`frontend/`)
+- Backend: Telegram bot (`backend/`)
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-Create a bot via BotFather and set the token as an environment variable:
-
-```powershell
-$env:UOG_NAVIGATOR_TELEGRAM_TOKEN = '123:ABC...'
-python bot.py
-```
-
-Commands:
-- `/start` - welcome message
-- `/locations` - list known campus locations
-
-You can extend `bot.py` to add inline queries, location-sharing, or integrate with a backend database.
+Next steps:
+- Install Flutter SDK and run the frontend (see `frontend/README.md`).
+- Create a Telegram bot token and run the backend (see `backend/README.md`).

@@ -1,31 +1,69 @@
-# Python
-__pycache__/
+# Python & Node
+__pycache__
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
-venv/
-.venv/
-*.egg-info/
-dist/
-build/
+node_modules
+dist
+build
+develop-eggs
+eggs
+.eggs
+lib64
+parts
+sdist
+var
+wheels
+*.egg-info
+.installed.cfg
+*.egg
 
-# Environment variables (sensitive)
-.env
-.env.local
-*.env
+# Virtual Environment
+.venv
+venv
+ENV
+env
 
-# IDE
-.vscode/
-.idea/
+# IDE & OS
+.vscode
+.idea
 *.swp
 *.swo
-
-# OS
+*~
 .DS_Store
 Thumbs.db
+*.xcodeproj
+*.xcworkspace
 
-# Telegram bot data
+# Environment Variables & Sensitive Files
+.env
+.env.*
+.env.local
+.env.*.local
+**/.env
+**/.env.*
+
+# Logs & Temporary Files
 *.log
-bot_data.json
+**/*.log
+server_log.txt
+*.bak
+*.tmp
+test_output.txt
+
+# Flutter & Android/iOS Build Artifacts
+**/.dart_tool
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache
+**/.pub
+**/build
+**/.gradle
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+**/ios/Pods
+**/ios/.symlinks
+**/ios/Flutter/.last_build_id

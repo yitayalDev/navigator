@@ -1,0 +1,16 @@
+{
+  "project": "uog_navigator",
+  "platform": "ios",
+  "github": {
+    "owner": "yitayalDev",
+    "repo": "navigator"
+  },
+  "ios": {
+    "path": "frontend/ios"
+  },
+  "flutter": {
+    "watch": {}
+  },
+  "reactNative": {},
+  "mobai": {}
+}
